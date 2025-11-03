@@ -1,0 +1,2 @@
+# Custom hooks (useAuth, useTripStatus)
+# Este directorio contiene hooks personalizados que encapsulan lógica reutilizable relacionada con la autenticación, el estado de los viajes y otras funcionalidades específicas de la aplicación. Estos hooks permiten una gestión más limpia y modular del estado y los efectos secundarios en los componentes funcionales de React.

@@ -1,0 +1,2 @@
+# Rutas protegidas por rol
+# Este directorio contiene rutas que están protegidas y solo accesibles para usuarios con roles específicos. Cada archivo define las rutas y los componentes asociados, asegurando que solo los usuarios autorizados puedan acceder a ciertas partes de la aplicación.

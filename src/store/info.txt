@@ -1,0 +1,2 @@
+# Redux store y configuración
+# Este archivo contiene la configuración del store de Redux, incluyendo la integración con middlewares como Redux Thunk o Redux Saga. También define los reducers principales y combina los slices de estado para gestionar el estado global de la aplicación de manera eficiente.

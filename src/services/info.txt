@@ -1,0 +1,2 @@
+# API calls con axios
+# Este directorio contiene servicios que manejan las llamadas a la API utilizando axios. Estos servicios centralizan la lógica de comunicación con el backend, facilitando la gestión de solicitudes HTTP y el manejo de respuestas y errores.

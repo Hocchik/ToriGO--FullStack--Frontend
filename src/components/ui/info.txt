@@ -1,0 +1,2 @@
+# Componentes estilizados con Tailwind
+# Este directorio contiene componentes de interfaz de usuario que están estilizados utilizando Tailwind CSS. Estos componentes aprovechan las utilidades de Tailwind para una rápida y eficiente creación de interfaces atractivas y responsivas.

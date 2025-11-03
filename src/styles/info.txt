@@ -1,0 +1,2 @@
+# Tailwind config y estilos globales
+# Este archivo contiene la configuración de Tailwind CSS, incluyendo temas personalizados, extensiones y plugins. También incluye estilos globales que se aplican en toda la aplicación para mantener una apariencia consistente.

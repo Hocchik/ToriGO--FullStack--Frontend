@@ -1,0 +1,2 @@
+# Imágenes, íconos, fuentes
+# Este directorio contiene todos los activos estáticos utilizados en la aplicación, como imágenes, íconos y fuentes personalizadas. Estos archivos son esenciales para la apariencia visual de la aplicación y se organizan aquí para facilitar su gestión y acceso.

@@ -1,0 +1,2 @@
+# Componentes reutilizables (Botón, Modal, Card)
+# Este directorio contiene componentes de interfaz de usuario reutilizables que pueden ser utilizados en diferentes partes de la aplicación. Algunos ejemplos incluyen botones personalizados, modales para diálogos y tarjetas para mostrar información de manera estructurada.

@@ -1,0 +1,2 @@
+# Módulos por rol o funcionalidad
+# Este directorio contiene módulos organizados por rol o funcionalidad específica dentro de la aplicación. Cada módulo agrupa componentes, servicios y otros archivos relacionados con una característica particular, facilitando la gestión y escalabilidad del código.

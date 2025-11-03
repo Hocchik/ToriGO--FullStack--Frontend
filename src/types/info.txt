@@ -1,0 +1,2 @@
+# Interfaces y tipos globales
+# Este archivo contiene definiciones de interfaces y tipos TypeScript que son utilizados en toda la aplicación. Estas definiciones ayudan a mantener la consistencia y tipado fuerte en el código, facilitando el desarrollo y mantenimiento.

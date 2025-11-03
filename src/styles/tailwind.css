@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+/* Estilos para el logo */
+.logo {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+}
+
+/* Centrar el logo en pantallas pequeñas */
+@media (max-width: 768px) {
+  .logo {
+    position: static;
+    display: block;
+    margin: 0 auto;
+    width: 75px; /* Ajusta el tamaño según sea necesario */
+    height: 75px; /* Ajusta el tamaño según sea necesario */
+  }
+}
