@@ -71,7 +71,7 @@ export const AppRouter = () => {
         <Route path='/profile/passenger' element={<ProfileRoute><PassengerProfile/></ProfileRoute>} />
 
         {/* Ruta de perfil - Driver */}
-        <Route path='/profile/driver' element={<ProfileRoute><DriverProfile/></ProfileRoute>} />
+        <Route path='/profile/driver' element={<DriverProfile/>} />
 
         {/* Rutas de servicio - Passenger */}
         <Route path='/service/passenger' element={<ServiceRoute><PassengerPage/></ServiceRoute>}/>
