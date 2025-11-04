@@ -7,6 +7,11 @@ export interface RegisterRequest {
   password: string;
   role: string;
   guardian_id?: number;
+  plate?: string;
+  license_number?: string;
+  issue_date?: string;
+  expiration_date?: string;
+  soat_expiration?: string;
 }
 
 export interface LoginRequest {
