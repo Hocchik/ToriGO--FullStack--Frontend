@@ -10,7 +10,7 @@ const LoginForm = () => {
   const { status, error } = useSelector((state: RootState) => state.auth);
 
   const [formData, setFormData] = useState<LoginRequest>({
-    email: '',
+    emailorphone: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +25,12 @@ const LoginForm = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    dispatch(loginUser(formData));
+    let emailorphone = formData.emailorphone.trim();
+    // Si es solo números, prepende '+51 '
+    if (/^\d{9}$/.test(emailorphone)) {
+      emailorphone = `+51 ${emailorphone}`;
+    }
+    dispatch(loginUser({ ...formData, emailorphone }));
   };
 
   const handleGoogleLogin = () => {
@@ -38,15 +43,15 @@ const LoginForm = () => {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Email Input */}
         <div>
-          <label htmlFor="email" className="sr-only">
+          <label htmlFor="emailorphone" className="sr-only">
             Número de teléfono o correo electrónico
           </label>
           <input
-            id="email"
-            name="email"
+            id="emailorphone"
+            name="emailorphone"
             type="text"
             required
-            value={formData.email}
+            value={formData.emailorphone}
             onChange={handleInputChange}
             className="w-full px-4 py-4 border border-gray-300 rounded-lg bg-gray-50 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
             placeholder="Número de teléfono o correo electrónico"

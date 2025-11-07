@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
+import { useDispatch, /* useSelector */ } from 'react-redux';
+import { authService } from '../../../services/AuthService';
+import { registerDriver } from '../authSlice';
 import { Eye, EyeOff } from 'lucide-react';
+import type { registerDriverRequest } from '../../../types/auth';
 
 // Estilos del formulario de registro de conductor
 export const driverRegisterStyles = {
@@ -44,33 +48,19 @@ export const driverRegisterStyles = {
   eyeIcon: "h-5 w-5 text-gray-400"
 };
 
-// Interfaces para los datos del formulario
-interface DriverFormData {
-  // Step 1 - Datos del vehículo y licencia
-  full_name: string;
-  dni: string;
-  plate: string;
-  license_number: string;
-  issue_date: string;
-  expiration_date: string;
-  soat_expiration: string;
-  // Step 2 - Datos de contacto
-  email: string;
-  phone: string;
-  password: string;
-}
-
 interface CountryCode {
   code: string;
   country: string;
 }
 
 export const DriverRegisterForm = () => {
+  const dispatch = useDispatch();
   const [step, setStep] = useState<1 | 2>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState('+51');
   const [showPhoneCode, setShowPhoneCode] = useState(false);
-  
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const countryCodes: CountryCode[] = [
     { code: '+51', country: 'Perú' },
     { code: '+52', country: 'México' },
@@ -80,18 +70,19 @@ export const DriverRegisterForm = () => {
     { code: '+34', country: 'España' },
     { code: '+1', country: 'USA' }
   ];
-  
-  const [formData, setFormData] = useState<DriverFormData>({
-    full_name: '',
+  const [formData, setFormData] = useState<registerDriverRequest>({
+    name: '',
+    last_name: '',
     dni: '',
     plate: '',
     license_number: '',
-    issue_date: '',
-    expiration_date: '',
-    soat_expiration: '4SOAT',
+    license_expiration_date: '',
+    insurance_policy_number: 'SOAT-',
+    insurance_policy_expiration_date: '',
     email: '',
     phone: '',
-    password: ''
+    password: '',
+    role: 'DRIVER'
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,7 +100,7 @@ export const DriverRegisterForm = () => {
     // Validación especial para Teléfono - solo números, máximo 8 dígitos
     if (name === 'phone') {
       const numericValue = value.replace(/\D/g, '');
-      if (numericValue.length <= 8) {
+      if (numericValue.length === 9) {
         setFormData(prev => ({ ...prev, [name]: numericValue }));
       }
       return;
@@ -117,11 +108,15 @@ export const DriverRegisterForm = () => {
     
     // Validación especial para Placa - formato ABC-123
     if (name === 'plate') {
-      let plateValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (plateValue.length <= 6) {
-        if (plateValue.length > 3) {
-          plateValue = plateValue.slice(0, 3) + '-' + plateValue.slice(3);
-        }
+      let raw = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const letters = raw.replace(/[^A-Z]/g, '').slice(0, 2);
+      const numbers = raw.replace(/[^0-9]/g, '').slice(0, 4);
+      let plateValue = letters;
+      if (numbers.length > 0) {
+        plateValue += '-' + numbers;
+      }
+      // Solo permitir formato XX-1234
+      if (plateValue.length <= 7) {
         setFormData(prev => ({ ...prev, [name]: plateValue }));
       }
       return;
@@ -129,85 +124,161 @@ export const DriverRegisterForm = () => {
     
     // Validación especial para Licencia - formato A-1234567
     if (name === 'license_number') {
-      let licenseValue = value.toUpperCase();
-      
-      // Permitir solo letras al inicio y números después del guión
-      if (licenseValue.length === 1 && /[A-Z]/.test(licenseValue)) {
-        setFormData(prev => ({ ...prev, [name]: licenseValue }));
-      } else if (licenseValue.length === 2 && licenseValue[1] === '-') {
-        setFormData(prev => ({ ...prev, [name]: licenseValue }));
-      } else if (licenseValue.length > 2 && licenseValue.includes('-')) {
-        const parts = licenseValue.split('-');
-        if (parts[0].length === 1 && /[A-Z]/.test(parts[0]) && /^\d*$/.test(parts[1]) && parts[1].length <= 7) {
-          setFormData(prev => ({ ...prev, [name]: licenseValue }));
-        }
-      }
+      // Permitir que el usuario escriba cualquier valor, pero solo guardar si cumple el formato
+      /* let licenseValue = value.toUpperCase().replace(/[^A-Z0-9]/g, ''); */
+      setFormData(prev => ({ ...prev, [name]: value.toUpperCase() }));
       return;
     }
-    
-    // Validación especial para SOAT - mantener "4SOAT" al inicio
-    if (name === 'soat_expiration') {
-      if (value.startsWith('4SOAT')) {
-        const additionalChars = value.slice(5);
-        if (additionalChars.length <= 10) {
-          setFormData(prev => ({ ...prev, [name]: value }));
-        }
-      } else {
-        setFormData(prev => ({ ...prev, [name]: '4SOAT' + value }));
-      }
+  
+    // Validación especial para SOAT - mantener "SOAT" al inicio
+    if (name === 'insurance_policy_number') {
+      let soatValue = value.replace(/[^A-Z0-9-]/gi, '');
+      setFormData(prev => ({ ...prev, [name]: 'SOAT-' + soatValue }));
       return;
     }
     
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleStep1Submit = (e: React.FormEvent) => {
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError(null);
     // Validación básica del Step 1
-    if (!formData.full_name || !formData.dni || !formData.plate || 
-        !formData.license_number || !formData.issue_date || 
-        !formData.expiration_date || !formData.soat_expiration) {
-      alert('Por favor complete todos los campos del paso 1');
+    if (!formData.name || !formData.last_name || !formData.dni || 
+        !formData.plate || !formData.license_number || 
+        !formData.license_expiration_date || 
+        !formData.insurance_policy_number || 
+        !formData.insurance_policy_expiration_date) {
+      setError('Por favor complete todos los campos del paso 1');
+      console.error('Por favor complete todos los campos del paso 1');
       return;
     }
-    
+    // Validar nombres y apellidos (máximo 3 palabras)
+    if (formData.name.trim().split(' ').length > 3) {
+      setError('Máximo 3 nombres permitidos');
+      console.error('Máximo 3 nombres permitidos');
+      return;
+    }
+    if (formData.last_name.trim().split(' ').length > 3) {
+      setError('Máximo 3 apellidos permitidos');
+      console.error('Máximo 3 apellidos permitidos');
+      return;
+    }
     if (formData.dni.length !== 8) {
-      alert('El DNI debe tener exactamente 8 dígitos');
+      setError('El DNI debe tener exactamente 8 dígitos');
+      console.error('El DNI debe tener exactamente 8 dígitos');
       return;
     }
-    
     if (formData.plate.length !== 7 || !formData.plate.includes('-')) {
-      alert('La placa debe tener el formato ABC-123');
+      setError('La placa debe tener el formato XX-1234');
+      console.error('La placa debe tener el formato XX-1234');
       return;
     }
-    
-    if (!formData.license_number.includes('-') || formData.license_number.length < 3) {
-      alert('La licencia debe tener el formato A-1234567');
+    // Validar licencia: debe empezar con A o B y tener 9 caracteres (1 letra + 8 números)
+    if (!/^[AB][0-9]{8}$/.test(formData.license_number)) {
+      setError('La licencia debe tener el formato A12345678 o B12345678');
+      console.error('La licencia debe tener el formato A12345678 o B12345678');
       return;
     }
-    
+    if (!formData.insurance_policy_number.startsWith('SOAT-')) {
+      setError('El SOAT debe comenzar con "SOAT-"');
+      console.error('El SOAT debe comenzar con "SOAT-"');
+      return;
+    }
+    // Verificación con backend usando AuthService (separado)
+    try {
+      // Verificar Licencia
+      const licenseRes = await authService.verifyLicense({
+        license_number: formData.license_number,
+        license_expiration_date: formData.license_expiration_date,
+        name: formData.name.split(' ')[0],
+        last_name: formData.last_name.split(' ')[0]
+      });
+      if (!licenseRes.valid) {
+        setError(licenseRes.error || 'Licencia inválida o no existe');
+        console.error(licenseRes.error || 'Licencia inválida o no existe');
+        return;
+      }
+      // Verificar SOAT
+      const soatRes = await authService.verifySoat({
+        insurance_policy_number: formData.insurance_policy_number,
+        insurance_policy_expiration_date: formData.insurance_policy_expiration_date,
+        plate: formData.plate
+      });
+      if (!soatRes.valid) {
+        setError(soatRes.error || 'SOAT inválido o no existe');
+        console.error(soatRes.error || 'SOAT inválido o no existe');
+        return;
+      }
+    } catch (err) {
+      setError('Error al verificar licencia/SOAT. Intente nuevamente.');
+      console.error('Error al verificar licencia/SOAT. Intente nuevamente.', err);
+      return;
+    }
     setStep(2);
   };
 
-  const handleStep2Submit = (e: React.FormEvent) => {
+  const handleStep2Submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLoading(true);
+    setError(null);
     // Validación básica del Step 2
     if (!formData.email || !formData.phone || !formData.password) {
-      alert('Por favor complete todos los campos del paso 2');
+      setError('Por favor complete todos los campos del paso 2');
+      console.error('Por favor complete todos los campos del paso 2');
+      setLoading(false);
       return;
     }
-    
     if (formData.password.length < 6) {
-      alert('La contraseña debe tener al menos 6 caracteres');
+      setError('La contraseña debe tener al menos 6 caracteres');
+      console.error('La contraseña debe tener al menos 6 caracteres');
+      setLoading(false);
       return;
     }
-    
-    // Aquí enviarías todos los datos del formulario
-    console.log('Datos completos del conductor:', formData);
-    alert('Registro de conductor completado exitosamente');
+    try {
+      // Formatear el teléfono antes de enviar
+      let phone = formData.phone;
+      if (selectedCountry === '+51') {
+        if (!phone.startsWith('+51 ')) {
+          phone = `+51 ${phone}`;
+        }
+      } else {
+        if (!phone.startsWith(selectedCountry)) {
+          phone = `${selectedCountry} ${phone}`;
+        }
+      }
+      const payload = { ...formData, phone };
+      // @ts-ignore
+      const resultAction = await dispatch(registerDriver(payload));
+      if (resultAction.payload && !resultAction.error) {
+        // Login automático después del registro
+        let emailorphone = payload.phone.trim();
+        // Si es solo números, prepende '+51 '
+        if (/^\d{9}$/.test(payload.phone)) {
+          emailorphone = `+51 ${payload.phone}`;
+        }
+        // @ts-ignore
+        const loginResult = await dispatch(loginUser({ emailorphone, password: payload.password }));
+        if (loginResult.payload && !loginResult.error) {
+          window.location.href = '/'; // Redirigir a la página principal
+        } else {
+          const loginError = typeof loginResult.payload === 'string' ? loginResult.payload : 'Error al iniciar sesión';
+          setError(loginError);
+          console.error(loginError);
+        }
+      } else {
+        const errorMsg = typeof resultAction.payload === 'string' ? resultAction.payload : 'Error al registrar conductor';
+        setError(errorMsg);
+        console.error(errorMsg);
+      }
+    } catch (err) {
+      setError('Error inesperado al registrar conductor');
+      console.error('Error inesperado al registrar conductor', err);
+    }
+    setLoading(false);
   };
+
+  
 
   const goBackToStep1 = () => {
     setStep(1);
@@ -228,24 +299,40 @@ export const DriverRegisterForm = () => {
             </h2>
             <p className={driverRegisterStyles.headerSubtitle}>Paso 1 de 2</p>
           </div>
-
+          {error && (
+            <div style={{ color: 'red', marginBottom: 8, fontWeight: 'bold' }}>{error}</div>
+          )}
           <form onSubmit={handleStep1Submit} className={driverRegisterStyles.form}>
-            {/* Nombre Completo */}
+            {/* Nombres */}
             <div className={driverRegisterStyles.inputGroup}>
               <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                Nombre Completo
+                Nombres
               </label>
               <input
                 type="text"
-                name="full_name"
-                value={formData.full_name}
+                name="name"
+                value={formData.name}
                 onChange={handleInputChange}
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
                 required
               />
             </div>
-
+            {/* Apellidos */}
+            <div className={driverRegisterStyles.inputGroup}>
+              <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Apellidos
+              </label>
+              <input
+                type="text"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleInputChange}
+                className={driverRegisterStyles.input}
+                style={{ fontFamily: 'Montserrat, sans-serif' }}
+                required
+              />
+            </div>
             {/* DNI */}
             <div className={driverRegisterStyles.inputGroup}>
               <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -263,7 +350,6 @@ export const DriverRegisterForm = () => {
                 required
               />
             </div>
-
             {/* Placa */}
             <div className={driverRegisterStyles.inputGroup}>
               <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -274,14 +360,13 @@ export const DriverRegisterForm = () => {
                 name="plate"
                 value={formData.plate}
                 onChange={handleInputChange}
-                placeholder="ABC-123"
+                placeholder="AB-3123"
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
                 maxLength={7}
                 required
               />
             </div>
-
             {/* Licencia */}
             <div className={driverRegisterStyles.inputGroup}>
               <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -292,63 +377,88 @@ export const DriverRegisterForm = () => {
                 name="license_number"
                 value={formData.license_number}
                 onChange={handleInputChange}
-                placeholder="A-1234567"
+                placeholder="A1234567"
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
                 maxLength={9}
                 required
               />
             </div>
-
             {/* Fecha Emisión */}
             <div className={driverRegisterStyles.inputGroup}>
               <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                Fecha Emisión
+                Fecha de Expiración (Licencia)
               </label>
               <input
                 type="date"
-                name="issue_date"
-                value={formData.issue_date}
+                name="license_expiration_date"
+                value={formData.license_expiration_date}
                 onChange={handleInputChange}
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
                 required
               />
             </div>
-
-            {/* Fecha Expiración */}
-            <div className={driverRegisterStyles.inputGroup}>
-              <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                Fecha Expiración
-              </label>
-              <input
-                type="date"
-                name="expiration_date"
-                value={formData.expiration_date}
-                onChange={handleInputChange}
-                className={driverRegisterStyles.input}
-                style={{ fontFamily: 'Montserrat, sans-serif' }}
-                required
-              />
-            </div>
-
             {/* SOAT */}
             <div className={driverRegisterStyles.inputGroup}>
               <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                SOAT: Expiración
+                SOAT Código
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value="SOAT-"
+                  disabled
+                  style={{
+                    width: '70px',
+                    background: '#f3f4f6',
+                    color: '#888',
+                    borderTopRightRadius: 0,
+                    borderBottomRightRadius: 0,
+                    fontFamily: 'Montserrat, sans-serif',
+                    border: '1px solid #d1d5db',
+                    textAlign: 'center'
+                  }}
+                />
+                <input
+                  type="text"
+                  name="insurance_policy_number"
+                  value={formData.insurance_policy_number.replace('SOAT-', '')}
+                  onChange={e => handleInputChange({
+                    ...e,
+                    target: {
+                      ...e.target,
+                      name: 'insurance_policy_number',
+                      value: e.target.value
+                    }
+                  })}
+                  className={driverRegisterStyles.input}
+                  style={{
+                    fontFamily: 'Montserrat, sans-serif',
+                    borderTopLeftRadius: 0,
+                    borderBottomLeftRadius: 0
+                  }}
+                  maxLength={15}
+                  required
+                  placeholder="NR-1357-2025"
+                />
+              </div>
+            </div>
+            {/* Fecha Expiración */}
+            <div className={driverRegisterStyles.inputGroup}>
+              <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Fecha de Expiración (SOAT)
               </label>
               <input
-                type="text"
-                name="soat_expiration"
-                value={formData.soat_expiration}
+                type="date"
+                name="insurance_policy_expiration_date"
+                value={formData.insurance_policy_expiration_date}
                 onChange={handleInputChange}
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
-                maxLength={15}
                 required
               />
             </div>
-
             <button
               type="submit"
               className={driverRegisterStyles.primaryButton}
@@ -374,6 +484,8 @@ export const DriverRegisterForm = () => {
         </div>
 
         <form onSubmit={handleStep2Submit} className={driverRegisterStyles.form}>
+          {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
+          {loading && <div style={{ color: 'gray', marginBottom: 8 }}>Registrando...</div>}
           {/* Email */}
           <div className={driverRegisterStyles.inputGroup}>
             <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -433,8 +545,8 @@ export const DriverRegisterForm = () => {
                 onChange={handleInputChange}
                 className={driverRegisterStyles.phoneInput}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
-                placeholder="98765432"
-                maxLength={8}
+                placeholder="987654321"
+                maxLength={9}
                 required
               />
             </div>
