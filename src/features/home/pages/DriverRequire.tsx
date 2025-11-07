@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 export const driverRequireStyles = {
   driverRequireContainer: "bg-center bg-white",
 
@@ -81,7 +83,7 @@ const faqData = [
 ];
 
 export const DriverRequire = () => {
-
+  const navigate = useNavigate();
   const [expandedFAQs, setExpandedFAQs] = useState<number[]>([]);
   
     const toggleFAQ = (id: number) => {
@@ -94,6 +96,10 @@ export const DriverRequire = () => {
 
     const leftColumnFAQs = faqData.filter((_, index) => index % 2 === 0);
     const rightColumnFAQs = faqData.filter((_, index) => index % 2 === 1);
+
+    const handleRegisterClick = () => {
+      navigate('/driver-register');
+    };
   return (
     <div className={driverRequireStyles.driverRequireContainer} style={{ fontFamily: 'Montserrat, sans-serif' }}>
       
@@ -273,12 +279,12 @@ export const DriverRequire = () => {
                   Únete a miles de conductores que ya están generando ingresos con ToroGo. 
                   Regístrate hoy y comienza tu camino hacia la libertad financiera.
                 </p>
-                <a 
-                  href="/auth?register=true" 
+                <button 
+                  onClick={handleRegisterClick}
                   className={driverRequireStyles.ctaButton}
                 >
                   Regístrate aquí
-                </a>
+                </button>
               </div>
             </div>
     </div>     

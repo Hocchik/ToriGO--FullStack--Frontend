@@ -18,6 +18,7 @@ import { DriverRequire } from '../features/home/pages/DriverRequire';
 
 // Auth Pages
 import { AuthPage } from '../features/auth/pages/AuthPage';
+import { DriverRegisterPage } from '../features/auth/pages/DriverRegisterPage';
 /* import { RequestTrip } from '../features/passenger/pages/RequestTrip';
 
 import { LoginForm } from '../features/auth/components/LoginForm';
@@ -81,6 +82,7 @@ export const AppRouter = () => {
 
         {/* Rutas de Autenticación */}
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/driver-register" element={<DriverRegisterPage />} />
 
         {/* Rutas de recuperación de contraseña */}
         <Route path="/recover-password" element={<RecoverPassword />} />
