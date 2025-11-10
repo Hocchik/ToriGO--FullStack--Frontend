@@ -9,43 +9,50 @@ import type { registerDriverRequest } from '../../../types/auth';
 export const driverRegisterStyles = {
   // Container principal
   container: "w-full max-w-md mx-auto",
-  formCard: "bg-white p-8 rounded-2xl shadow-2xl border border-gray-100",
   
   // Header
-  headerContainer: "text-center mb-6",
-  headerTitle: "text-2xl font-bold text-gray-800 mb-2",
-  headerSubtitle: "text-gray-600 text-sm",
+  headerContainer: "text-center mb-4",
+  headerTitle: "text-xl font-bold text-gray-900 mb-1",
+  headerSubtitle: "text-gray-500 text-xs",
   
   // Form
-  form: "space-y-4",
+  form: "space-y-3",
+  
+  // Error message
+  errorMessage: "text-red-500 text-xs mb-2 p-2 bg-red-50 rounded-lg border border-red-200",
+  loadingMessage: "text-gray-500 text-xs mb-2 p-2 bg-gray-50 rounded-lg border border-gray-200",
   
   // Input groups
-  inputGroup: "space-y-1",
-  label: "block text-sm font-medium text-gray-700 mb-1",
-  input: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-gray-50",
+  inputGroup: "mb-3",
+  label: "block text-xs font-medium text-gray-700 mb-1",
+  input: "w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm",
   
   // Phone section
   phoneContainer: "flex",
-  phoneButton: "px-3 py-2 border border-gray-300 border-r-0 rounded-l-lg bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center space-x-1",
-  phoneButtonText: "text-sm font-medium",
-  phoneDropdown: "absolute top-full left-0 mt-1 w-40 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto",
-  phoneDropdownItem: "w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none text-sm",
-  phoneInput: "flex-1 px-3 py-2 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-gray-50",
+  phoneButton: "px-3 py-2 border border-gray-200 border-r-0 rounded-l-xl bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center space-x-1",
+  phoneButtonText: "text-xs font-medium text-gray-700",
+  phoneDropdown: "absolute top-full left-0 mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-32 overflow-y-auto",
+  phoneDropdownItem: "w-full px-3 py-1 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none text-xs text-gray-700",
+  phoneInput: "flex-1 px-3 py-2 border border-gray-200 rounded-r-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm",
   
   // Password section
   passwordContainer: "relative",
-  passwordInput: "w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-gray-50",
+  passwordInput: "w-full px-3 py-2 pr-10 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm",
   passwordToggle: "absolute inset-y-0 right-0 pr-3 flex items-center",
   
   // Buttons
-  primaryButton: "w-full bg-red-700 text-white py-3 px-4 rounded-lg hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 font-semibold",
-  buttonGroup: "flex space-x-3",
-  secondaryButton: "flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200 font-semibold",
-  primaryButtonHalf: "flex-1 bg-red-700 text-white py-3 px-4 rounded-lg hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 font-semibold",
+  primaryButton: "w-full bg-red-600 text-white py-2 px-4 rounded-xl hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 font-medium text-sm",
+  buttonGroup: "flex space-x-3 mt-4",
+  secondaryButton: "flex-1 bg-gray-400 text-white py-2 px-3 rounded-xl hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-colors duration-200 font-medium text-sm",
+  primaryButtonHalf: "flex-1 bg-red-600 text-white py-2 px-3 rounded-xl hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 font-medium text-sm",
   
   // Icons
-  arrowIcon: "w-4 h-4 text-gray-600",
-  eyeIcon: "h-5 w-5 text-gray-400"
+  arrowIcon: "w-3 h-3 text-gray-500",
+  eyeIcon: "h-4 w-4 text-gray-400",
+  
+  // Additional styles for consistency
+  divider: "text-center my-3 text-gray-400 text-xs",
+  linkText: "text-red-600 hover:text-red-700 font-medium text-xs"
 };
 
 interface CountryCode {
@@ -106,16 +113,20 @@ export const DriverRegisterForm = () => {
       return;
     }
     
-    // Validación especial para Placa - formato ABC-123
+    // Validación especial para Placa - formato LL-NNNN (2 letras, guion, 4 números)
     if (name === 'plate') {
-      let raw = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const raw = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const letters = raw.replace(/[^A-Z]/g, '').slice(0, 2);
-      const numbers = raw.replace(/[^0-9]/g, '').slice(0, 4);
-      let plateValue = letters;
-      if (numbers.length > 0) {
-        plateValue += '-' + numbers;
+      let numbers = raw.replace(/[^0-9]/g, '').slice(0, 4);
+      // No aceptar números si aún no hay 2 letras
+      if (numbers.length > 0 && letters.length < 2) {
+        numbers = '';
       }
-      // Solo permitir formato XX-1234
+      let plateValue = letters;
+      if (letters.length === 2 && numbers.length > 0) {
+        plateValue = `${letters}-${numbers}`;
+      }
+      // Permitimos longitud máxima 7 (2 letras + '-' + 4 números)
       if (plateValue.length <= 7) {
         setFormData(prev => ({ ...prev, [name]: plateValue }));
       }
@@ -169,9 +180,10 @@ export const DriverRegisterForm = () => {
       console.error('El DNI debe tener exactamente 8 dígitos');
       return;
     }
-    if (formData.plate.length !== 7 || !formData.plate.includes('-')) {
-      setError('La placa debe tener el formato XX-1234');
-      console.error('La placa debe tener el formato XX-1234');
+    // Placa debe tener formato LL-NNNN (ej: AB-1234)
+    if (!/^[A-Z]{2}-\d{4}$/.test(formData.plate)) {
+      setError('La placa debe tener el formato AB-1234 (2 letras, guion, 4 números)');
+      console.error('La placa debe tener el formato AB-1234 (2 letras, guion, 4 números)');
       return;
     }
     // Validar licencia: debe empezar con A o B y tener 9 caracteres (1 letra + 8 números)
@@ -292,16 +304,16 @@ export const DriverRegisterForm = () => {
   if (step === 1) {
     return (
       <div className={driverRegisterStyles.container}>
-        <div className={driverRegisterStyles.formCard}>
-          <div className={driverRegisterStyles.headerContainer}>
-            <h2 className={driverRegisterStyles.headerTitle} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Datos del Conductor
-            </h2>
-            <p className={driverRegisterStyles.headerSubtitle}>Paso 1 de 2</p>
-          </div>
-          {error && (
-            <div style={{ color: 'red', marginBottom: 8, fontWeight: 'bold' }}>{error}</div>
-          )}
+        <div className={driverRegisterStyles.headerContainer}>
+          <h1 className={driverRegisterStyles.headerTitle} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+            ¡Regístrate como Conductor!
+          </h1>
+          <p className={driverRegisterStyles.headerSubtitle}>Completa tus datos - Paso 1 de 2</p>
+        </div>
+        
+        {error && (
+          <div className={driverRegisterStyles.errorMessage}>{error}</div>
+        )}
           <form onSubmit={handleStep1Submit} className={driverRegisterStyles.form}>
             {/* Nombres */}
             <div className={driverRegisterStyles.inputGroup}>
@@ -360,7 +372,7 @@ export const DriverRegisterForm = () => {
                 name="plate"
                 value={formData.plate}
                 onChange={handleInputChange}
-                placeholder="AB-3123"
+                placeholder="AB-1234"
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
                 maxLength={7}
@@ -410,14 +422,16 @@ export const DriverRegisterForm = () => {
                   value="SOAT-"
                   disabled
                   style={{
-                    width: '70px',
+                    width: '60px',
                     background: '#f3f4f6',
                     color: '#888',
                     borderTopRightRadius: 0,
                     borderBottomRightRadius: 0,
                     fontFamily: 'Montserrat, sans-serif',
                     border: '1px solid #d1d5db',
-                    textAlign: 'center'
+                    textAlign: 'center',
+                    fontSize: '14px',
+                    padding: '8px 12px'
                   }}
                 />
                 <input
@@ -467,7 +481,6 @@ export const DriverRegisterForm = () => {
               Siguiente Paso →
             </button>
           </form>
-        </div>
       </div>
     );
   }
@@ -475,17 +488,16 @@ export const DriverRegisterForm = () => {
   // Step 2 - Datos de contacto
   return (
     <div className={driverRegisterStyles.container}>
-      <div className={driverRegisterStyles.formCard}>
-        <div className={driverRegisterStyles.headerContainer}>
-          <h2 className={driverRegisterStyles.headerTitle} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-            Información de Contacto
-          </h2>
-          <p className={driverRegisterStyles.headerSubtitle}>Paso 2 de 2</p>
-        </div>
+      <div className={driverRegisterStyles.headerContainer}>
+        <h1 className={driverRegisterStyles.headerTitle} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+          Información de Contacto
+        </h1>
+        <p className={driverRegisterStyles.headerSubtitle}>Completa tu registro - Paso 2 de 2</p>
+      </div>
 
-        <form onSubmit={handleStep2Submit} className={driverRegisterStyles.form}>
-          {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
-          {loading && <div style={{ color: 'gray', marginBottom: 8 }}>Registrando...</div>}
+      <form onSubmit={handleStep2Submit} className={driverRegisterStyles.form}>
+        {error && <div className={driverRegisterStyles.errorMessage}>{error}</div>}
+        {loading && <div className={driverRegisterStyles.loadingMessage}>Registrando...</div>}
           {/* Email */}
           <div className={driverRegisterStyles.inputGroup}>
             <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -601,7 +613,16 @@ export const DriverRegisterForm = () => {
             </button>
           </div>
         </form>
-      </div>
+        
+        <div className={driverRegisterStyles.divider}>
+          o
+        </div>
+        
+        <div className="text-center">
+          <p className="text-gray-600 text-xs">
+            ¿Ya tienes una cuenta? <span className={driverRegisterStyles.linkText}>Inicia sesión aquí</span>
+          </p>
+        </div>
     </div>
   );
 };
