@@ -7,23 +7,47 @@ export interface RegisterRequest {
   password: string;
   role: string;
   guardian_id?: number;
+  plate?: string;
+  license_number?: string;
+  issue_date?: string;
+  expiration_date?: string;
+  soat_expiration?: string;
 }
 
-export interface LoginRequest {
+export interface registerDriverRequest {
+  // Step 1 - Datos del vehículo y licencia
+  name: string;
+  last_name: string;
+  dni: string;
+  plate: string;
+  license_number: string;
+  license_expiration_date: string;
+  insurance_policy_number: string; //SOAT
+  insurance_policy_expiration_date: string; //SOAT
+  // Step 2 - Datos de contacto
   email: string;
+  phone: string;
+  password: string;
+  role: string;
+}
+
+
+export interface LoginRequest {
+  emailorphone: string;
   password: string;
 }
 
+
 export interface LoginResponse {
   user: {
-    id: number;
-    full_name: string;
+    id: string;
+    name: string;
+    last_name: string;
     email: string;
-    dni: string;
+    phone: string;
   };
   token: string;
-  role?: string;
-  roles?: string[];
+  role: string;
 }
 
 export interface AuthState {
@@ -36,8 +60,8 @@ export interface AuthState {
 }
 
 export interface User {
-    id: number;
-    full_name: string;
-    email: string;
-    dni: string;
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
 }

@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authService } from '../../services/AuthService';
-import type { AuthState, LoginRequest, RegisterRequest } from '../../types/auth';
+import type { AuthState, LoginRequest, registerDriverRequest, RegisterRequest } from '../../types/auth';
 import { saveAuthData, clearAuthData, getInitialAuthState } from '../../utils/authStorage';
 
 const initialLocal = getInitialAuthState();
@@ -24,8 +24,13 @@ export const registerUser = createAsyncThunk(
       if (!response.token || !response.user) {
         return rejectWithValue('Registro incompleto');
       }
-      saveAuthData(response.token, response.user, response.role || 'guest');
-      return response;
+      // Mapear la respuesta para cumplir con la interfaz User si faltan propiedades
+      const user = {
+        ...response.user,
+        full_name: (response.user as any).full_name ?? `${response.user.name ?? ''} ${response.user.last_name ?? ''}`,
+      };
+      saveAuthData(response.token, user, response.role || 'guest');
+      return { ...response, user };
     } catch (error: unknown) {
       if (typeof error === 'object' && error !== null && 'response' in error) {
         const err = error as { response?: { data?: { message?: string } } };
@@ -42,11 +47,37 @@ export const loginUser = createAsyncThunk(
   'auth/login',
   async (credentials: LoginRequest, { rejectWithValue }) => {
     try {
-      const response = await authService.login(credentials);
+      let emailorphone = credentials.emailorphone.trim();
+      // Si es solo números, prepende '+51 '
+      if (/^\d{9}$/.test(emailorphone)) {
+        emailorphone = `+51 ${emailorphone}`;
+      }
+      const response = await authService.login({ ...credentials, emailorphone });
       if (!response.token || !response.user) {
         return rejectWithValue('Credenciales inválidas');
       }
-      saveAuthData(response.token, response.user, response.role || 'guest');
+      const user = {
+        ...response.user,
+        full_name: (response.user as any).full_name ?? `${response.user.name ?? ''} ${response.user.last_name ?? ''}`,
+      };
+      saveAuthData(response.token, user, response.role || 'guest');
+      return { ...response, user };
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const err = error as { response?: { data?: { message?: string } } };
+        return rejectWithValue(err.response?.data?.message || 'Error de conexión');
+      }
+
+      return rejectWithValue('Error inesperado');
+    }
+  }
+);
+
+export const registerDriver = createAsyncThunk(
+  'auth/register/driver',
+  async (driverData: registerDriverRequest, { rejectWithValue }) => {
+    try {
+      const response = await authService.registerDriver(driverData);
       return response;
     } catch (error: unknown) {
       if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -104,7 +135,6 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.role = action.payload.role || null;
-        state.roles = action.payload.roles || [];
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
@@ -121,6 +151,20 @@ const authSlice = createSlice({
         state.role = action.payload.role || null;
       })
       .addCase(registerUser.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload as string;
+      })
+      .addCase(registerDriver.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(registerDriver.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.role = action.payload.role || null;
+      })
+      .addCase(registerDriver.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload as string;
       })
