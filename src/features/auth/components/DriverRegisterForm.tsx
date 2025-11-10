@@ -113,11 +113,21 @@ export const DriverRegisterForm = () => {
       return;
     }
     
-    // Validación especial para Placa - solo alfanumérico, máximo 6 caracteres
+    // Validación especial para Placa - formato LL-NNNN (2 letras, guion, 4 números)
     if (name === 'plate') {
-      const plateValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      // Solo permitir máximo 6 caracteres alfanuméricos
-      if (plateValue.length <= 6) {
+      const raw = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const letters = raw.replace(/[^A-Z]/g, '').slice(0, 2);
+      let numbers = raw.replace(/[^0-9]/g, '').slice(0, 4);
+      // No aceptar números si aún no hay 2 letras
+      if (numbers.length > 0 && letters.length < 2) {
+        numbers = '';
+      }
+      let plateValue = letters;
+      if (letters.length === 2 && numbers.length > 0) {
+        plateValue = `${letters}-${numbers}`;
+      }
+      // Permitimos longitud máxima 7 (2 letras + '-' + 4 números)
+      if (plateValue.length <= 7) {
         setFormData(prev => ({ ...prev, [name]: plateValue }));
       }
       return;
@@ -170,9 +180,10 @@ export const DriverRegisterForm = () => {
       console.error('El DNI debe tener exactamente 8 dígitos');
       return;
     }
-    if (formData.plate.length !== 6) {
-      setError('La placa debe tener exactamente 6 caracteres alfanuméricos');
-      console.error('La placa debe tener exactamente 6 caracteres alfanuméricos');
+    // Placa debe tener formato LL-NNNN (ej: AB-1234)
+    if (!/^[A-Z]{2}-\d{4}$/.test(formData.plate)) {
+      setError('La placa debe tener el formato AB-1234 (2 letras, guion, 4 números)');
+      console.error('La placa debe tener el formato AB-1234 (2 letras, guion, 4 números)');
       return;
     }
     // Validar licencia: debe empezar con A o B y tener 9 caracteres (1 letra + 8 números)
@@ -361,10 +372,10 @@ export const DriverRegisterForm = () => {
                 name="plate"
                 value={formData.plate}
                 onChange={handleInputChange}
-                placeholder="AB3123"
+                placeholder="AB-1234"
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
-                maxLength={6}
+                maxLength={7}
                 required
               />
             </div>
