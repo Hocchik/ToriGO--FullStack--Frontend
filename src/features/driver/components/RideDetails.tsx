@@ -46,10 +46,20 @@ export default function RideDetails({ ride, onCancel, onArrived, onPaid }: Props
     setState("ESPERANDO");
   };
   const handleStartTrip = () => setState("EN_CURSO");
-  const handleFinishTrip = () => setState("FINALIZADO");
+  const handleFinishTrip = () => {
+    setState("FINALIZADO");
+    // notify parent/app that trip finished
+    try { window.dispatchEvent(new CustomEvent('toriGO:tripFinished')); } catch {}
+  };
   const handleSubmitRating = (rating: number, comment: string) => {
     try { onPaid(); } catch {}
     window.dispatchEvent(new CustomEvent("toriGO:openRequests", { detail: { rating, comment } }));
+  };
+
+  // dispatch event when trip starts so parent can begin moving driver marker
+  const handleStartTripWithEvent = () => {
+    try { window.dispatchEvent(new CustomEvent('toriGO:tripStarted')); } catch {}
+    handleStartTrip();
   };
 
   return (
@@ -114,7 +124,7 @@ export default function RideDetails({ ride, onCancel, onArrived, onPaid }: Props
         )}
 
         {state === "ESPERANDO" && (
-          <WaitingPanel passengerName={passenger.name} onStartTrip={handleStartTrip} />
+          <WaitingPanel passengerName={passenger.name} onStartTrip={handleStartTripWithEvent} />
         )}
 
         {state === "EN_CURSO" && (

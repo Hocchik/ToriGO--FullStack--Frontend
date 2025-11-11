@@ -66,7 +66,7 @@ interface WaitingPanelProps {
 export default function WaitingPanel({ passengerName, onStartTrip }: WaitingPanelProps) {
     const [showVerifyModal, setShowVerifyModal] = useState(false);
 
-    const handleConfirmVerification = (code: string) => {
+    const handleConfirmVerification = (_code: string) => {
         // Aquí podrías enviar el código al backend si fuera necesario
         setShowVerifyModal(false);
         onStartTrip(); // Transición a EN_CURSO

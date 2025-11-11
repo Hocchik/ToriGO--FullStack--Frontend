@@ -4,9 +4,30 @@ interface Props {
   requests: RideRequest[];
   onAccept: (ride: RideRequest) => void;
   onStopSearch: () => void;
+  showPreview?: boolean; // if false, do not render the small map preview (empty box)
 }
 
-export default function RequestList({ requests, onAccept, onStopSearch }: Props) {
+export default function RequestList({ requests, onAccept, onStopSearch, showPreview = true }: Props) {
+  const mapboxToken = (import.meta.env.VITE_MAPBOX_TOKEN as string) || '';
+
+  const buildStaticPreview = (req: any) => {
+  if (!mapboxToken || !showPreview) return null;
+    const pc = req.pickupCoords;
+    const dc = req.dropCoords;
+    const markers: string[] = [];
+    if (pc && typeof pc.lng === 'number' && typeof pc.lat === 'number') {
+      markers.push(`pin-s+06b6d4(${pc.lng},${pc.lat})`);
+    }
+    if (dc && typeof dc.lng === 'number' && typeof dc.lat === 'number') {
+      markers.push(`pin-s+10b981(${dc.lng},${dc.lat})`);
+    }
+    if (markers.length === 0) return null;
+    const markerStr = markers.join(',');
+    // small preview size to fit the compact card
+    const size = '320x120';
+    return `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markerStr}/auto/${size}?access_token=${mapboxToken}`;
+  };
+
   return (
     <div className="h-full flex flex-col bg-white">
       <div className="p-4 border-b border-gray-200 text-lg md:text-xl font-bold text-red-700 flex justify-between items-center">
@@ -52,14 +73,30 @@ export default function RequestList({ requests, onAccept, onStopSearch }: Props)
         "
       >
         {/* 1. SECCIÓN VISUAL (MAPA DE RUTA) */}
-        <div className="h-28 bg-gray-200 flex items-center justify-center text-sm text-gray-500 relative">
-          <span className="absolute inset-0 bg-gray-200 flex items-center justify-center">
-            
-          </span>
-          <span className="z-10 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
-            Vista previa de la ruta
-          </span>
-        </div>
+        {(() => {
+          const previewUrl = buildStaticPreview(req as any);
+          return (
+            <div className="h-28 bg-gray-200 flex items-center justify-center text-sm text-gray-500 relative overflow-hidden">
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt="vista previa"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  onError={(e) => {
+                    // hide image on error to show the fallback overlay
+                    try { (e.target as HTMLImageElement).style.display = 'none'; } catch {}
+                  }}
+                />
+              ) : (
+                <span className="absolute inset-0 bg-gray-200 flex items-center justify-center" />
+              )}
+
+              <span className="z-10 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
+                Vista previa de la ruta
+              </span>
+            </div>
+          );
+        })()}
 
         {/* 2. SECCIÓN DE INFORMACIÓN Y ACCIÓN */}
         <div className="p-4 space-y-3">

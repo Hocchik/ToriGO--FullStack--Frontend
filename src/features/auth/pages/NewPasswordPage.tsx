@@ -1,5 +1,5 @@
 import { ArrowLeft as ArrowLeftIcon } from "lucide-react";
-import React from "react";
+// React import removed because it's unused in this file
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Label } from "../components/Label";

@@ -27,6 +27,11 @@ export const NavBar = () => {
     const user = useSelector((state: RootState) => state.auth.user);
     const role = useSelector((state: RootState) => state.auth.role);
 
+    // Ensure we pass a `full_name` to UserMenu to satisfy the `User` type expected there
+    const augmentedUser = user
+      ? ({ ...(user as any), full_name: (user as any).full_name ?? `${(user as any).name ?? ''} ${(user as any).last_name ?? ''}` } as any)
+      : null;
+
     return(
       <div style={{ fontFamily: 'Montserrat, sans-serif' }}>
         <nav className={navbarStyles.navbar}>
@@ -47,12 +52,12 @@ export const NavBar = () => {
             {/* Usuario y rol */}
             <div className={navbarStyles.actions}>
               <Link
-                to={role === 'driver' ? '/service/driver' : '/service/passenger'}
+                to={role === 'DRIVER' ? '/service/driver' : '/service/passenger'}
                 className={navbarStyles.button}
               >
                   INICIA TU VIAJE
                 </Link>
-                <UserMenu user={user} role={role} />
+        <UserMenu user={augmentedUser} role={role} />
             </div>
           </div>
         </nav>

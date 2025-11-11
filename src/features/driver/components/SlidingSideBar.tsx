@@ -7,7 +7,7 @@ interface SlidingSidebarProps {
   title?: string;
 }
 
-export default function SlidingSidebar({ open, onClose, children, title = "Panel" }: SlidingSidebarProps) {
+export default function SlidingSidebar({ open, onClose, children }: SlidingSidebarProps) {
   return (
     <>
       {/* Overlay */}

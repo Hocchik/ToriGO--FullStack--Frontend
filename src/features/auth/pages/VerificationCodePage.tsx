@@ -1,5 +1,5 @@
 import { ArrowLeft as ArrowLeftIcon, ArrowRight as ArrowRightIcon } from "lucide-react";
-import React from "react";
+// React import removed because it's unused in this file
 import { Button } from "../components/Button";
 import { InputForVCode } from "../components/InputForVCode";
 
