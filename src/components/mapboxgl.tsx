@@ -19,6 +19,7 @@ interface TripMapProps {
   showOrigin?: boolean;
   showDestination?: boolean;
   showRoute?: boolean;
+  onMapClick?: (loc: Location) => void;
 }
 
 mapboxgl.accessToken = (import.meta.env.VITE_MAPBOX_TOKEN as string) || '';
@@ -28,7 +29,7 @@ mapboxgl.accessToken = (import.meta.env.VITE_MAPBOX_TOKEN as string) || '';
   // (we'll verify with a request below)
   // NOTE: we declare state inside the component below (after ref declarations)
 
-export const TripMap = ({ origin, destination, driverLocation, showMarkers = true, routeFrom = null, routeTo = null, followDriver = false, showDriverMarker = false, showOrigin = true, showDestination = true, showRoute = false }: TripMapProps) => {
+export const TripMap = ({ origin, destination, driverLocation, showMarkers = true, routeFrom = null, routeTo = null, followDriver = false, showDriverMarker = false, showOrigin = true, showDestination = true, showRoute = false, onMapClick }: TripMapProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<mapboxgl.Map | null>(null);
   const originMarker = useRef<mapboxgl.Marker | null>(null);
@@ -74,11 +75,32 @@ export const TripMap = ({ origin, destination, driverLocation, showMarkers = tru
     const d = project(destination);
     const drv = project(driverLocation);
 
+    const handleSvgClick = (e: React.MouseEvent<SVGElement, MouseEvent>) => {
+      if (typeof onMapClick !== 'function') return;
+      const svg = e.currentTarget as SVGElement;
+      const rect = svg.getBoundingClientRect();
+      const cx = e.clientX - rect.left; // x within svg
+      const cy = e.clientY - rect.top; // y within svg
+      // inverse of project: map x,y back to lng,lat
+      const invX = (cx - 10) / (viewW - 20); // normalized 0..1
+      const invY = (cy - 10) / (viewH - 20); // normalized 0..1
+      const lng = (minLng - pad) + invX * ((maxLng + pad) - (minLng - pad));
+      const lat = (maxLat + pad) - invY * ((maxLat + pad) - (minLat - pad));
+      try {
+        // debug log for selection
+        // eslint-disable-next-line no-console
+        console.debug && console.debug('TripMap: svg click detected', { cx, cy, lat, lng });
+        onMapClick({ lat, lng });
+      } catch (err) {
+        try { console.warn('TripMap: svg click handler error', err); } catch (e) {}
+      }
+    };
+
     return (
       <div className="w-full h-full rounded-lg shadow-md bg-gray-50 flex flex-col items-center justify-center p-4">
         <div className="text-sm text-gray-600 mb-2">Mapbox token not configured — mostrando vista previa (fallback)</div>
         <div className="w-full h-full max-h-[420px]">
-          <svg viewBox={`0 0 ${viewW} ${viewH}`} preserveAspectRatio="xMidYMid meet" className="w-full h-full rounded border bg-white">
+          <svg onClick={handleSvgClick} viewBox={`0 0 ${viewW} ${viewH}`} preserveAspectRatio="xMidYMid meet" className="w-full h-full rounded border bg-white" role="img">
             {/* draw route line between routeFrom/routeTo if available and showRoute is true */}
             {showRoute && <line x1={lf.x} y1={lf.y} x2={lt.x} y2={lt.y} stroke="#3b82f6" strokeWidth={2} strokeDasharray="4 4" />}
             {showOrigin && <circle cx={o.x} cy={o.y} r={6} fill="#06b6d4" />}
@@ -150,6 +172,19 @@ export const TripMap = ({ origin, destination, driverLocation, showMarkers = tru
       mapInstance.current.on('wheel', startUserInteraction);
       mapInstance.current.on('dragstart', startUserInteraction);
       mapInstance.current.on('zoomstart', startUserInteraction);
+      // expose click handler for selection use-cases
+      if (typeof onMapClick === 'function') {
+        mapInstance.current.on('click', (e: any) => {
+          try {
+            const lngLat = e.lngLat;
+            // eslint-disable-next-line no-console
+            console.debug && console.debug('TripMap: map click detected', lngLat);
+            onMapClick({ lat: lngLat.lat, lng: lngLat.lng });
+          } catch (err) {
+            try { console.warn('TripMap: map click handler error', err); } catch (e) {}
+          }
+        });
+      }
     } catch (e) {}
 
     // Do not create origin/destination markers or route on map initialization.
@@ -436,7 +471,7 @@ export const TripMap = ({ origin, destination, driverLocation, showMarkers = tru
   }, [driverLocation, followDriver]);
 
   return (
-    <div className="w-full h-full rounded-lg shadow-md relative">
+    <div className="w-full h-full rounded-lg shadow-md relative pointer-events-auto">
       {/* status badge */}
       {tokenStatus === 'checking' && (
         <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs bg-yellow-50 text-yellow-800 border border-yellow-200">Comprobando token...</div>

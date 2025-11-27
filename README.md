@@ -67,3 +67,27 @@ export default tseslint.config([
   },
 ])
 ```
+
+## TripService and API configuration
+
+This project includes a small frontend service wrapper `src/services/TripService.ts` that centralizes calls related to trips (upsert, trace append and lifecycle events). It uses the shared Axios instance at `src/services/api.ts` which reads the API base URL and attaches a JWT token from `localStorage` on every request.
+
+- Environment variable: `VITE_API_URL`
+  - Set this to the backend base URL (example: `https://api.example.com`). The `api` instance will use this as the Axios `baseURL`.
+- Token storage: the Axios instance will attach a bearer token taken from `localStorage` (keys tried: `auth_token`, `token`). If your app stores the JWT in Redux or under a different key, update `src/services/api.ts` accordingly or add an interceptor that reads from the store.
+
+Usage example (frontend):
+
+```ts
+import TripService from './src/services/TripService';
+
+// Upsert trip (idempotent by external id)
+await TripService.upsertTrip(payload);
+
+// Append a chunk of trace points
+await TripService.appendTrace(tripId, [{ lat, lng, ts }, ...]);
+```
+
+Notes:
+- The `TripService` methods are thin wrappers around the backend endpoints; adjust the paths if your backend uses different routes (for example `/api/trips` vs `/trips`).
+- For offline support, the frontend code falls back to saving trip payloads into `localStorage` under the key `toriGO_trips_v1` when the network call fails.

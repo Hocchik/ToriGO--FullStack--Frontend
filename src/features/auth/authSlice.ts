@@ -33,8 +33,9 @@ export const registerUser = createAsyncThunk(
       return { ...response, user };
     } catch (error: unknown) {
       if (typeof error === 'object' && error !== null && 'response' in error) {
-        const err = error as { response?: { data?: { message?: string } } };
-        return rejectWithValue(err.response?.data?.message || 'Error de conexión');
+        const err = error as { response?: { data?: { message?: string; error?: string } } };
+        const msg = err.response?.data?.message || err.response?.data?.error || 'Error de conexión';
+        return rejectWithValue(msg);
       }
 
       return rejectWithValue('Error inesperado');
@@ -64,8 +65,9 @@ export const loginUser = createAsyncThunk(
       return { ...response, user };
     } catch (error: unknown) {
       if (typeof error === 'object' && error !== null && 'response' in error) {
-        const err = error as { response?: { data?: { message?: string } } };
-        return rejectWithValue(err.response?.data?.message || 'Error de conexión');
+        const err = error as { response?: { data?: { message?: string; error?: string } } };
+        const msg = err.response?.data?.message || err.response?.data?.error || 'Error de conexión';
+        return rejectWithValue(msg);
       }
 
       return rejectWithValue('Error inesperado');

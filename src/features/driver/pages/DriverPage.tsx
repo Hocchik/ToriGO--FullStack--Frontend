@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { RideRequest } from "./Models";
-import { TripMap } from "../../../components/mapboxgl";
-import { useDispatch } from 'react-redux';
-import { addTrip } from '../driverSlice';
+import DriverMap from "../../../components/DriverMap";
+import { useDispatch, useSelector } from 'react-redux';
+import TripService from '../../../services/TripService';
+import { addTrip, acceptTrip, setDriverAvailability } from '../driverSlice';
+import type { RootState } from '../../../store';
 import RequestList from "../components/RequestList";
 import RideDetails from "../components/RideDetails";
 import LoadingOverlay from "../components/LoadingOverlay";
@@ -47,6 +49,7 @@ export const DriverPage = () => {
   const driverLocationRef = useRef<{ lat: number; lng: number } | null>(driverLocation);
   const driverTraceRef = useRef<Array<{ lat: number; lng: number; ts: string }>>([]);
   const dispatch = useDispatch();
+  const availability = useSelector((s: RootState) => s.driver?.availability);
   const [routePhase, setRoutePhase] = useState<'idle' | 'toPickup' | 'toDrop'>('idle');
   const [pendingRequests, setPendingRequests] = useState<RideRequest[]>([]);
   const [expiredRequests, setExpiredRequests] = useState<RideRequest[]>([]);
@@ -175,11 +178,19 @@ export const DriverPage = () => {
 
   const handleGoOnline = () => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setIsOnline(true);
-      setPendingRequests(dummyRequests);
-    }, 1500);
+    // attempt to notify backend that driver is available
+    (async () => {
+      try {
+        await dispatch(setDriverAvailability('available') as any);
+        // if success, open search mode
+        setIsOnline(true);
+        setPendingRequests(dummyRequests);
+      } catch (e) {
+        console.warn('Failed to set availability', e);
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   // Geolocation behavior:
@@ -333,28 +344,96 @@ export const DriverPage = () => {
   }, [driverLocation]);
 
   const handleStopSearch = () => {
-    setIsOnline(false);
-    setPendingRequests([]);
-    setExpiredRequests([]);
-    setRequestPanelOpen(false);
+    (async () => {
+      try {
+        await dispatch(setDriverAvailability('offline') as any);
+      } catch (e) {
+        console.warn('Failed to set offline availability', e);
+      }
+      setIsOnline(false);
+      setPendingRequests([]);
+      setExpiredRequests([]);
+      setRequestPanelOpen(false);
+    })();
   };
 
   const handleAcceptRide = (ride: RideRequest) => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setActiveRide(ride as any);
-      setPendingRequests([]);
-      setExpiredRequests([]);
-      setRequestPanelOpen(false);
-  // init driver location near the city center only if we don't have a real device location
-  const start = { lat: (ride as any).pickupCoords.lat + 0.0015, lng: (ride as any).pickupCoords.lng - 0.002 };
-  if (!driverLocation) setDriverLocation(start);
-      // start moving towards pickup
-      setRoutePhase('toPickup');
-      startMovingTowards((ride as any).pickupCoords);
-    }, 1200);
+    (async () => {
+      try {
+        // Ask backend to accept the trip (idempotent)
+        await dispatch(acceptTrip({ id: (ride as any).id }) as any);
+        setLoading(false);
+        setActiveRide(ride as any);
+        setPendingRequests([]);
+        setExpiredRequests([]);
+        setRequestPanelOpen(false);
+        // init driver location near the city center only if we don't have a real device location
+        const start = { lat: (ride as any).pickupCoords.lat + 0.0015, lng: (ride as any).pickupCoords.lng - 0.002 };
+        if (!driverLocation) setDriverLocation(start);
+        // start moving towards pickup
+        setRoutePhase('toPickup');
+        startMovingTowards((ride as any).pickupCoords);
+      } catch (e) {
+        console.warn('Failed to accept trip on server, falling back to local accept', e);
+        setLoading(false);
+        // fallback to local accept behavior
+        setActiveRide(ride as any);
+        setPendingRequests([]);
+        setExpiredRequests([]);
+        setRequestPanelOpen(false);
+        const start = { lat: (ride as any).pickupCoords.lat + 0.0015, lng: (ride as any).pickupCoords.lng - 0.002 };
+        if (!driverLocation) setDriverLocation(start);
+        setRoutePhase('toPickup');
+        startMovingTowards((ride as any).pickupCoords);
+      }
+    })();
   };
+
+  // Polling: fetch available trips from backend when driver is available
+  useEffect(() => {
+    let pollId: number | null = null;
+    const startPoll = () => {
+      // immediate fetch
+      (async () => {
+        try {
+          const res = await TripService.getAvailable();
+          const items = (res?.data && Array.isArray(res.data)) ? res.data : [];
+          if (items.length > 0) setPendingRequests(items as any[]);
+        } catch (e) {
+          // keep previous pendingRequests on error
+          // console.warn('Error fetching available trips', e);
+        }
+      })();
+
+      pollId = window.setInterval(async () => {
+        try {
+          const res = await TripService.getAvailable();
+          const items = (res?.data && Array.isArray(res.data)) ? res.data : [];
+          // merge unique by id
+          setPendingRequests((prev) => {
+            const map = new Map(prev.map((p) => [(p as any).id, p]));
+            for (const it of items) map.set((it as any).id, it);
+            return Array.from(map.values()) as any[];
+          });
+        } catch (e) {
+          // ignore transient errors
+        }
+      }, 15000) as unknown as number;
+    };
+
+    const stopPoll = () => {
+      if (pollId !== null) {
+        window.clearInterval(pollId);
+        pollId = null;
+      }
+    };
+
+    if (availability === 'available') startPoll();
+    else stopPoll();
+
+    return () => stopPoll();
+  }, [availability]);
 
   const haversineMeters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
     const toRad = (v: number) => (v * Math.PI) / 180;
@@ -532,12 +611,9 @@ export const DriverPage = () => {
     return payload;
   };
 
-  const saveTripLocally = (payload: any) => {
-    // Try sending to backend first; if it fails, persist locally as fallback
-    console.log('Attempting to send trip payload to API:', payload);
-    const apiBase = (import.meta.env.VITE_API_URL as string) || '';
-    const url = apiBase ? `${apiBase.replace(/\/$/, '')}/trips` : '';
-
+  const saveTripLocally = async (payload: any) => {
+    // Preferential path: use TripService (Axios) with JWT; fallback to localStorage
+    console.log('Attempting to send trip payload via TripService:', payload);
     const fallbackToLocal = async () => {
       try {
         const key = 'toriGO_trips_v1';
@@ -571,55 +647,40 @@ export const DriverPage = () => {
       }
     };
 
-    if (!url) {
-      // no API configured -> fallback immediately
-      void fallbackToLocal();
-      return;
-    }
-
-    // send to API
-    (async () => {
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          console.warn('Trip API responded with non-OK, falling back to local storage', res.status);
-          await fallbackToLocal();
-          return;
-        }
-        const data = await res.json().catch(() => null);
-        console.log('Trip saved to API (simulated):', data ?? 'no-json');
-        // Optionally persist to redux with server response id
-        try {
-          const serverId = (data && data.id) || payload.tripId;
-          dispatch(
-            addTrip({
-              id: serverId,
-              driverId: payload.driverId,
-              passengerId: payload.passengerId,
-              origin: { lat: payload.origin.coords.lat, lng: payload.origin.coords.lng, address: payload.origin.address },
-              destination: { lat: payload.destination.coords.lat, lng: payload.destination.coords.lng, address: payload.destination.address },
-              status: payload.status,
-              price: payload.price,
-              startedAt: payload.startedAt,
-              finishedAt: payload.finishedAt,
-              canceledAt: payload.canceledAt,
-              cancelReason: payload.cancelReason,
-              raw: payload.raw,
-              driverTrace: payload.driverTrace,
-            })
-          );
-        } catch (e) {
-          console.error('Failed to dispatch server-saved trip to redux', e);
-        }
-      } catch (e) {
-        console.warn('Error sending trip to API, falling back to local storage', e);
+    try {
+      const res = await TripService.upsertTrip(payload);
+      if (!res || !res.data) {
+        console.warn('TripService returned empty response, fallback to local storage');
         await fallbackToLocal();
+        return;
       }
-    })();
+      // success -> add to redux using server-provided id when available
+      const serverId = res.data.id || payload.tripId;
+      try {
+        dispatch(
+          addTrip({
+            id: serverId,
+            driverId: payload.driverId,
+            passengerId: payload.passengerId,
+            origin: { lat: payload.origin.coords.lat, lng: payload.origin.coords.lng, address: payload.origin.address },
+            destination: { lat: payload.destination.coords.lat, lng: payload.destination.coords.lng, address: payload.destination.address },
+            status: payload.status,
+            price: payload.price,
+            startedAt: payload.startedAt,
+            finishedAt: payload.finishedAt,
+            canceledAt: payload.canceledAt,
+            cancelReason: payload.cancelReason,
+            raw: payload.raw,
+            driverTrace: payload.driverTrace,
+          })
+        );
+      } catch (e) {
+        console.error('Failed to dispatch server-saved trip to redux', e);
+      }
+    } catch (e) {
+      console.warn('Error sending trip to API via TripService, falling back to local storage', e);
+      await fallbackToLocal();
+    }
   };
 
   const handleExpire = useCallback(
@@ -696,39 +757,35 @@ export const DriverPage = () => {
           }}
         >
           <div className="relative w-full h-full flex items-stretch">
+                  {/* Availability badge / toggle */}
+                  <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+                    <div className="px-3 py-1 rounded-full text-sm font-medium border bg-white/90">
+                      {availability === 'available' ? 'Disponible' : availability === 'busy' ? 'Ocupado' : 'Desconectado'}
+                    </div>
+                    {availability !== 'available' ? (
+                      <button onClick={handleGoOnline} className="px-3 py-1 rounded-md bg-green-600 text-white text-sm">Conectar</button>
+                    ) : (
+                      <button onClick={handleStopSearch} className="px-3 py-1 rounded-md bg-gray-800 text-white text-sm">Desconectar</button>
+                    )}
+                  </div>
                   {activeRide && driverLocation ? (
                     <div className="flex-1 h-full">
-                      <TripMap
+                      <DriverMap
                         origin={(activeRide as any).pickupCoords}
                         destination={(activeRide as any).dropCoords}
                         driverLocation={driverLocation}
-                        // while en route (toPickup or toDrop) use the current driverLocation as routeFrom
-                        routeFrom={routePhase !== 'idle' ? driverLocation : undefined}
-                        // routeTo will be pickup while going to pickup, and destination when going to drop
-                        routeTo={routePhase === 'toPickup' ? (activeRide as any).pickupCoords : routePhase === 'toDrop' ? (activeRide as any).dropCoords : undefined}
-                        followDriver={true}
-                        showMarkers={true}
-                        showDriverMarker={true}
-                        // show origin/destination as soon as a ride is selected (activeRide)
-                        // so the driver can preview pickup and drop locations. The
-                        // actual street route is drawn while moving.
-                        showOrigin={!!activeRide}
-                        showDestination={!!activeRide}
-                        // draw a realistic street route (Mapbox Directions) while moving
                         showRoute={routePhase !== 'idle'}
                       />
                     </div>
                   ) : (
-                    // Show a default TripMap centered on Lima Metropolitana so the map always
+                    // Show a default DriverMap centered on Lima Metropolitana so the map always
                     // occupies the content area instead of the placeholder text.
                     <div className="flex-1 h-full">
-                        <TripMap
+                        <DriverMap
                           origin={{ lat: -12.0460, lng: -77.0425 }}
                           destination={{ lat: -12.0500, lng: -77.0300 }}
                           driverLocation={driverLocation || { lat: -12.0460, lng: -77.0425 }}
-                          showMarkers={false}
-                          // when the request panel is open (searching) hide the driver marker so the map is empty
-                          showDriverMarker={!requestPanelOpen && !!driverLocation}
+                          showRoute={false}
                         />
                     </div>
                   )}

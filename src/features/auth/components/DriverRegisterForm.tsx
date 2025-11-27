@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { useDispatch, /* useSelector */ } from 'react-redux';
+import { useAppDispatch } from '../../../store/hooks';
 import { authService } from '../../../services/AuthService';
-import { registerDriver } from '../authSlice';
+import { registerDriver, loginUser } from '../authSlice';
+import { unwrapResult } from '@reduxjs/toolkit';
+import { saveAuthData } from '../../../utils/authStorage';
 import { Eye, EyeOff } from 'lucide-react';
 import type { registerDriverRequest } from '../../../types/auth';
+import { validatePlate, validateSOAT } from '../../../utils/validators';
 
 // Estilos del formulario de registro de conductor
 export const driverRegisterStyles = {
@@ -61,7 +64,7 @@ interface CountryCode {
 }
 
 export const DriverRegisterForm = () => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const [step, setStep] = useState<1 | 2>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState('+51');
@@ -107,26 +110,23 @@ export const DriverRegisterForm = () => {
     // Validación especial para Teléfono - solo números, máximo 8 dígitos
     if (name === 'phone') {
       const numericValue = value.replace(/\D/g, '');
-      if (numericValue.length === 9) {
+      if (numericValue.length <= 9) {
         setFormData(prev => ({ ...prev, [name]: numericValue }));
       }
       return;
     }
     
-    // Validación especial para Placa - formato LL-NNNN (2 letras, guion, 4 números)
+    // Validación especial para Placa - formato NNNN-LL (4 números, guion, 2 letras)
     if (name === 'plate') {
       const raw = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      // prefer numbers first for the canonical format: 4 digits then 2 letters
+      const numbers = raw.replace(/[^0-9]/g, '').slice(0, 4);
       const letters = raw.replace(/[^A-Z]/g, '').slice(0, 2);
-      let numbers = raw.replace(/[^0-9]/g, '').slice(0, 4);
-      // No aceptar números si aún no hay 2 letras
-      if (numbers.length > 0 && letters.length < 2) {
-        numbers = '';
+      let plateValue = numbers;
+      if (numbers.length > 0 && letters.length > 0) {
+        plateValue = `${numbers}-${letters}`;
       }
-      let plateValue = letters;
-      if (letters.length === 2 && numbers.length > 0) {
-        plateValue = `${letters}-${numbers}`;
-      }
-      // Permitimos longitud máxima 7 (2 letras + '-' + 4 números)
+      // Permitimos longitud máxima 7 (4 números + '-' + 2 letras)
       if (plateValue.length <= 7) {
         setFormData(prev => ({ ...prev, [name]: plateValue }));
       }
@@ -181,7 +181,7 @@ export const DriverRegisterForm = () => {
       return;
     }
     // Placa debe tener formato LL-NNNN (ej: AB-1234)
-    if (!/^[A-Z]{2}-\d{4}$/.test(formData.plate)) {
+    if (!validatePlate(formData.plate)) {
       setError('La placa debe tener el formato AB-1234 (2 letras, guion, 4 números)');
       console.error('La placa debe tener el formato AB-1234 (2 letras, guion, 4 números)');
       return;
@@ -192,9 +192,9 @@ export const DriverRegisterForm = () => {
       console.error('La licencia debe tener el formato A12345678 o B12345678');
       return;
     }
-    if (!formData.insurance_policy_number.startsWith('SOAT-')) {
-      setError('El SOAT debe comenzar con "SOAT-"');
-      console.error('El SOAT debe comenzar con "SOAT-"');
+    if (!validateSOAT(formData.insurance_policy_number)) {
+      setError('El SOAT debe tener el formato SOAT-1234-AB-2024');
+      console.error('El SOAT debe tener el formato SOAT-1234-AB-2024');
       return;
     }
     // Verificación con backend usando AuthService (separado)
@@ -260,28 +260,40 @@ export const DriverRegisterForm = () => {
         }
       }
       const payload = { ...formData, phone };
-      // @ts-ignore
-      const resultAction = await dispatch(registerDriver(payload));
-      if (resultAction.payload && !resultAction.error) {
-        // Login automático después del registro
+      try {
+        const dispatched = await dispatch(registerDriver(payload));
+        const resp = unwrapResult(dispatched) as any;
+        // If backend returned token + user, persist and redirect immediately
+        if (resp && resp.token && resp.user) {
+          try {
+            saveAuthData(resp.token, resp.user, resp.role || 'DRIVER');
+          } catch (e) {}
+          window.location.href = '/';
+          return;
+        }
+
+        // Otherwise attempt login as a fallback
         let emailorphone = payload.phone.trim();
-        // Si es solo números, prepende '+51 '
         if (/^\d{9}$/.test(payload.phone)) {
           emailorphone = `+51 ${payload.phone}`;
         }
-        // @ts-ignore
-        const loginResult = await dispatch(loginUser({ emailorphone, password: payload.password }));
-        if (loginResult.payload && !loginResult.error) {
-          window.location.href = '/'; // Redirigir a la página principal
-        } else {
-          const loginError = typeof loginResult.payload === 'string' ? loginResult.payload : 'Error al iniciar sesión';
+        try {
+          const loginDispatched = await dispatch(loginUser({ emailorphone, password: payload.password }));
+          const loginResp = unwrapResult(loginDispatched) as any;
+          if (loginResp && loginResp.token && loginResp.user) {
+            try { saveAuthData(loginResp.token, loginResp.user, loginResp.role || 'DRIVER'); } catch (e) {}
+            window.location.href = '/';
+            return;
+          }
+        } catch (loginErr) {
+          const loginError = (loginErr as any)?.message || 'Error al iniciar sesión';
           setError(loginError);
           console.error(loginError);
         }
-      } else {
-        const errorMsg = typeof resultAction.payload === 'string' ? resultAction.payload : 'Error al registrar conductor';
+      } catch (regErr) {
+        const errorMsg = (regErr as any)?.message || 'Error al registrar conductor';
         setError(errorMsg);
-        console.error(errorMsg);
+        console.error('Register driver error', regErr);
       }
     } catch (err) {
       setError('Error inesperado al registrar conductor');
