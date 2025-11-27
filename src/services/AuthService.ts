@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { LoginRequest, LoginResponse, registerDriverRequest, RegisterRequest } from '../types/auth';
+import type { LoginRequest, LoginResponse, registerDriverRequest, RegisterRequest, TokenAndEmail } from '../types/auth';
 
 const API_BASE_URL = 'http://localhost:3000/api';
 
@@ -18,6 +18,32 @@ apiClient.interceptors.request.use((config) => {
 
 // ✅ Servicio de autenticación
 export const authService = {
+  confirmEmail: async (userEmail : string): Promise<any> => {
+    const email = {
+      "email":userEmail
+    }
+    
+    console.log(`Si se le está pasando a confirmEmail el parametro: ${email.email}`);
+
+    const { data } = await apiClient.post('/password/request-reset', email);
+    console.log(`dataaa: ${data}`);
+    return data;
+  },
+
+  sendResetToken: async (tokenAndEmail: TokenAndEmail): Promise<any> => {
+    console.log(`Token and email received in service: ${tokenAndEmail.email}, ${tokenAndEmail.token}`);
+    const { data } = await apiClient.post('/password/verify-token', tokenAndEmail);
+    console.log(`dataaa: ${data.message}`);
+    return data;
+  },
+
+  changePassword: async(resetPasswordData: LoginRequest): Promise<any> => {
+    console.log(`Reset Password Data received in service: ${resetPasswordData.emailorphone}, ${resetPasswordData.password}`);
+    const { data } = await apiClient.post('/password/confirm-reset', resetPasswordData);
+    console.log(`dataaa: ${data.message}`);
+    return data;
+  },
+  
   register: async (payload: RegisterRequest): Promise<LoginResponse> => {
     console.log(payload)
     const { data } = await apiClient.post('/auth/register', payload);

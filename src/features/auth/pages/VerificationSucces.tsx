@@ -1,8 +1,15 @@
 import { ArrowLeft as ArrowLeftIcon, Check as CheckIcon } from "lucide-react";
 // React import removed because it's unused in this file
 import { Button } from "../components/Button";
+import { useNavigate } from "react-router-dom";
 
 export const VerificationSucces = () => {
+
+  const navigate = useNavigate();
+
+  const goToResetPassword = () => {
+    navigate("/new-password");
+  }
   return (
     <div className="relative w-full min-h-screen bg-gray-100 flex flex-col items-center">
       {/* Header with logo */}
@@ -30,7 +37,7 @@ export const VerificationSucces = () => {
           </div>
 
           {/* Change Password Button */}
-          <Button className="bg-[#8B0000] hover:bg-[#7A0000] text-white rounded-full px-6 py-3 md:px-8 md:py-4 flex items-center gap-2 font-normal text-base md:text-lg mx-auto">
+          <Button onClick={()=>goToResetPassword()} className="bg-[#8B0000] hover:bg-[#7A0000] text-white rounded-full px-6 py-3 md:px-8 md:py-4 flex items-center gap-2 font-normal text-base md:text-lg mx-auto">
             Cambiar contraseña
           </Button>
         </div>

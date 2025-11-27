@@ -1,13 +1,32 @@
 import { ArrowLeft as ArrowLeftIcon } from "lucide-react";
 // React import removed because it's unused in this file
+import { useState } from "react";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Label } from "../components/Label";
 import { useNavigate } from "react-router-dom";
 
+import { authService } from "../../../services/AuthService";
+
 
 export const RecoverPassword = () => {
+
+  const [email, setEmail] = useState("");
   const navigate = useNavigate();
+
+  const handleSubmit = async() => {
+    // llamar al authservice para enviar el correo
+    const res = await authService.confirmEmail(email);
+    
+    if(!res.message){
+      console.log("El correo proporcionado no existe");
+      return;
+    }
+
+    localStorage.setItem('email',email);
+
+    navigate("/verification-code");
+  }
 
   return (
     <div className="relative w-full min-h-screen bg-white flex flex-col">
@@ -46,13 +65,15 @@ export const RecoverPassword = () => {
             <Input
               id="email"
               type="email"
+              value={email}
+              onChange={(e:React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
               className="w-full h-12 md:h-[52px] bg-[#d9d9d9] rounded-[20px] border-0 text-base md:text-lg px-4"
               placeholder="ejemplo@correo.com"
             />
           </div>
 
           <div className="flex justify-center md:justify-start pt-4">
-            <Button className="w-full max-w-[338px] h-14 md:h-[74px] bg-[#780001] hover:bg-[#780001]/90 rounded-[50px] transition-colors duration-200">
+            <Button onClick={() => handleSubmit()} className="w-full max-w-[338px] h-14 md:h-[74px] bg-[#780001] hover:bg-[#780001]/90 rounded-[50px] transition-colors duration-200">
               <span className="[font-family:'Roboto',Helvetica] font-normal text-white text-lg md:text-[32px] tracking-[0] leading-[normal]">
                 Enviar código
               </span>
