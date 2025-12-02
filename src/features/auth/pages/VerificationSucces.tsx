@@ -1,5 +1,4 @@
 import { ArrowLeft as ArrowLeftIcon, Check as CheckIcon } from "lucide-react";
-// React import removed because it's unused in this file
 import { Button } from "../components/Button";
 
 export const VerificationSucces = () => {

@@ -1,4 +1,4 @@
-import { TripMap } from './mapboxgl';
+import { TripMap } from './googlemaps';
 
 interface Loc { lat: number; lng: number }
 

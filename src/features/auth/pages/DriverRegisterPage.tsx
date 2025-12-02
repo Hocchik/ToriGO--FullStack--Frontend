@@ -57,3 +57,5 @@ export const DriverRegisterPage = () => {
     </div>
   );
 };
+
+export default DriverRegisterPage;

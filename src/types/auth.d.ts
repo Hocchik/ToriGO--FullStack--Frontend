@@ -20,15 +20,22 @@ export interface registerDriverRequest {
   last_name: string;
   dni: string;
   plate: string;
+  color: string;
   license_number: string;
   license_expiration_date: string;
   insurance_policy_number: string; //SOAT
   insurance_policy_expiration_date: string; //SOAT
+  technical_review_date?: string; // optional date for technical review
   // Step 2 - Datos de contacto
   email: string;
   phone: string;
   password: string;
   role: string;
+}
+
+export interface TokenAndEmail {
+  email: string;
+  token: string;
 }
 
 

@@ -8,24 +8,23 @@ interface Props {
 }
 
 export default function RequestList({ requests, onAccept, onStopSearch, showPreview = true }: Props) {
-  const mapboxToken = (import.meta.env.VITE_MAPBOX_TOKEN as string) || '';
+  const gmapsKey = (import.meta.env.VITE_GMAPS_KEY as string) || localStorage.getItem('gMapsKey') || '';
 
   const buildStaticPreview = (req: any) => {
-  if (!mapboxToken || !showPreview) return null;
+    if (!gmapsKey || !showPreview) return null;
     const pc = req.pickupCoords;
     const dc = req.dropCoords;
     const markers: string[] = [];
     if (pc && typeof pc.lng === 'number' && typeof pc.lat === 'number') {
-      markers.push(`pin-s+06b6d4(${pc.lng},${pc.lat})`);
+      markers.push(`color:blue|label:P|${pc.lat},${pc.lng}`);
     }
     if (dc && typeof dc.lng === 'number' && typeof dc.lat === 'number') {
-      markers.push(`pin-s+10b981(${dc.lng},${dc.lat})`);
+      markers.push(`color:green|label:D|${dc.lat},${dc.lng}`);
     }
     if (markers.length === 0) return null;
-    const markerStr = markers.join(',');
-    // small preview size to fit the compact card
+    const markerStr = markers.map(encodeURIComponent).join('&markers=');
     const size = '320x120';
-    return `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markerStr}/auto/${size}?access_token=${mapboxToken}`;
+    return `https://maps.googleapis.com/maps/api/staticmap?size=${size}&markers=${markerStr}&key=${gmapsKey}`;
   };
 
   return (

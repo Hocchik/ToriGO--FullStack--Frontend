@@ -1,10 +1,9 @@
 import { ArrowLeft as ArrowLeftIcon } from "lucide-react";
-// React import removed because it's unused in this file
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Label } from "../components/Label";
 
-export const NewPassowordPage = () => {
+export const NewPasswordPage = () => {
   return (
     <div className="relative w-full min-h-screen bg-gray-100 flex flex-col items-center">
       {/* Header with logo */}

@@ -15,7 +15,14 @@ api.interceptors.request.use((cfg) => {
   try {
     // token storage key may vary; adapt as needed
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
-    if (token) cfg.headers = { ...cfg.headers, Authorization: `Bearer ${token}` };
+    if (token) {
+      if (cfg.headers) {
+        // Axios header typing can be strict; mutate safely
+        (cfg.headers as any).Authorization = `Bearer ${token}`;
+      } else {
+        cfg.headers = { Authorization: `Bearer ${token}` } as any;
+      }
+    }
   } catch (e) {
     // ignore
   }

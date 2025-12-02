@@ -8,16 +8,19 @@ export const createTrip = createAsyncThunk(
   'passenger/createTrip',
   async (payload: RideRequest, { rejectWithValue }) => {
     try {
+      // Build payload matching backend recommended shape
+      const external_id = (payload as any).external_id || `ext_${Date.now()}_${Math.floor(Math.random()*1000)}`;
       const body: any = {
-        external_id: (payload as any).external_id,
-        pickup: payload.pickup,
-        destination: payload.destination,
-        type: payload.type,
-        payment: payload.payment,
-        pickup_coords: payload.pickupCoords,
-        destination_coords: payload.destinationCoords,
-        price: payload.price,
-        created_at: new Date().toISOString(),
+        external_id,
+        origin_address: payload.pickup,
+        origin_lat: payload.pickupCoords?.lat,
+        origin_lng: payload.pickupCoords?.lng,
+        destination_address: payload.destination,
+        destination_lat: payload.destinationCoords?.lat,
+        destination_lng: payload.destinationCoords?.lng,
+        payment_method: payload.payment,
+        price_snapshot: payload.price ? { estimated_fare: payload.price, currency: 'PEN' } : undefined,
+        raw_payload: {},
       };
       // Use the dedicated request endpoint for passenger trip requests
       const res = await TripService.requestTrip(body);

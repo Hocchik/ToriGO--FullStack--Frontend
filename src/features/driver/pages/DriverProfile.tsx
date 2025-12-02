@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import logoNavbar from '../../../assets/logoNavbar.png';
 import iconMoto from '../../../assets/iconmoto.png';
+import { postLicense, postSoat, postTechnicalReview } from '../../../services/DriverService';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { getDriverProfile, updateDriverProfile } from '../driverSlice';
 
 interface DriverData {
   id: string;
@@ -37,6 +40,12 @@ interface DriverData {
     color: string;
     chassisNumber: string;
   };
+  technicalReview?: {
+    reviewDate?: string;
+    expiresAt?: string;
+    passed?: boolean;
+    needsRenewal?: boolean;
+  };
   licenseIssueDate: string;
   licenseExpiryDate: string;
   licenseStatus: string;
@@ -49,7 +58,7 @@ interface DriverData {
 }
 
 /* --- Navbar --- */
-const DriverNavbar: React.FC<{ profileImage?: string; name?: string }> = ({ profileImage, name }) => {
+export const DriverNavbar: React.FC<{ profileImage?: string; name?: string }> = ({ profileImage, name }) => {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement | null>(null);
@@ -162,39 +171,64 @@ const DriverNavbar: React.FC<{ profileImage?: string; name?: string }> = ({ prof
 const DriverProfile: React.FC = () => {
   /* const [isEditing, setIsEditing] = useState(false); */
   const [profileData, setProfileData] = useState<DriverData>({
-    id: '1',
-    firstName: 'Carlos',
-    lastName: 'Mendoza Rivera',
-    email: 'carlos.mendoza@email.com',
-    phone: '+51 987 123 456',
+    id: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
     profileImage: '',
-    rating: 4.9,
-    totalTrips: 342,
-    earnings: 2850.50,
-    memberSince: 'Marzo 2023',
-    licenseNumber: 'L12345678',
-    dni: '12345678',
+    rating: 0,
+    totalTrips: 0,
+    earnings: 0,
+    memberSince: '',
+    licenseNumber: '',
+    dni: '',
     vehicleInfo: {
-      type: 'Mototaxi',
-      motorCc: '125',
-      year: '2022',
-      plate: '4417-SA',
-      color: 'Amarillo',
-      chassisNumber: 'CHS-987654'
+      type: '',
+      motorCc: '',
+      year: '',
+      plate: '',
+      color: '',
+      chassisNumber: ''
     },
-    licenseIssueDate: '2020-06-15',
-    licenseExpiryDate: '2025-06-15',
+    licenseIssueDate: '',
+    licenseExpiryDate: '',
     licenseStatus: 'Vigente',
-    soatNumber: '120240123456789',
-    soatExpiryDate: '2025-12-31',
-    soatInsurer: 'RIMAC Seguros',
-    soatCertificate: 'CERT-RIMAC-2024-789123',
-    status: 'active',
-    achievements: ['Conductor del Mes', '100 Viajes Completados', 'Excelente Servicio']
+    soatNumber: '',
+    soatExpiryDate: '',
+    soatInsurer: '',
+    soatCertificate: '',
+    status: 'inactive',
+    achievements: []
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [pendingDocuments, setPendingDocuments] = useState<any[]>([]);
+  const [loadingProfile, setLoadingProfile] = useState<boolean>(true);
+  const dispatch = useAppDispatch();
+  const storedProfile = useAppSelector(s => s.driver.profile);
+  const storeLoading = useAppSelector(s => s.driver.loadingProfile);
+  
+  console.log(getDriverProfile());
+
+  useEffect(() => {
+    // fetch profile into redux on mount
+    dispatch(getDriverProfile() as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // when store profile changes, populate local editable state and pending docs
+  useEffect(() => {
+    if (storedProfile) {
+      setProfileData(prev => ({ ...prev, ...(storedProfile as any) } as DriverData));
+      if (storedProfile.raw?.pendingDocuments) setPendingDocuments(storedProfile.raw.pendingDocuments);
+    }
+    // keep loading flag synced
+    setLoadingProfile(storeLoading);
+  }, [storedProfile, storeLoading]);
+
+  
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -207,6 +241,70 @@ const DriverProfile: React.FC = () => {
         }));
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // Document upload modal state
+  const [docModalOpen, setDocModalOpen] = useState<boolean>(false);
+  const [docType, setDocType] = useState<'license' | 'soat' | 'technical' | null>(null);
+  const [docForm, setDocForm] = useState<Record<string, any>>({});
+  const [docFile, setDocFile] = useState<File | null>(null);
+
+  const openDocModal = (type: 'license' | 'soat' | 'technical') => {
+    setDocType(type);
+    setDocForm({});
+    setDocFile(null);
+    setDocModalOpen(true);
+  };
+
+  const handleDocInput = (key: string, value: any) => {
+    setDocForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleDocFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setDocFile(file);
+  };
+
+  const submitDocument = async () => {
+    if (!docType) return;
+    try {
+      // prepare form/data
+      if (docFile) {
+        const fd = new FormData();
+        // append metadata depending on type
+        Object.entries(docForm).forEach(([k, v]) => { if (v !== undefined && v !== null) fd.append(k, String(v)); });
+        fd.append('file', docFile);
+
+        let res;
+        if (docType === 'license') res = await postLicense(fd);
+        else if (docType === 'soat') res = await postSoat(fd);
+        else res = await postTechnicalReview(fd);
+        const inserted = res.data;
+        setPendingDocuments(prev => [inserted, ...prev]);
+        alert('Documento enviado. Quedó en estado Pendiente.');
+      } else {
+        // send json
+        const payload = { ...docForm };
+        let res;
+        if (docType === 'license') res = await postLicense(payload as any);
+        else if (docType === 'soat') res = await postSoat(payload as any);
+        else res = await postTechnicalReview(payload as any);
+        const inserted = res.data;
+        setPendingDocuments(prev => [inserted, ...prev]);
+        alert('Documento enviado. Quedó en estado Pendiente.');
+      }
+
+      setDocModalOpen(false);
+      setDocType(null);
+      setDocForm({});
+      setDocFile(null);
+        // refresh profile because technical-review can update motorcycle
+      await dispatch(getDriverProfile() as any);
+    } catch (err: any) {
+      console.error('submitDocument error', err);
+      const msg = err?.response?.data?.message ?? 'Error al enviar documento';
+      alert(msg);
     }
   };
 
@@ -234,11 +332,9 @@ const DriverProfile: React.FC = () => {
   };
 
   const validateAll = () => {
+    // Only validate editable fields (leave documentary and unrelated fields visible but not required)
     const required = [
-      'firstName','lastName','phone','email','dni','licenseNumber',
-      'vehicleInfo.type','vehicleInfo.motorCc','vehicleInfo.chassisNumber','vehicleInfo.color',
-      'soatNumber','soatInsurer','soatExpiryDate','soatCertificate',
-      'licenseIssueDate','licenseExpiryDate','licenseStatus'
+      'firstName', 'lastName', 'phone', 'email', 'vehicleInfo.color'
     ];
 
     const newErrors: Record<string,string> = {};
@@ -270,10 +366,37 @@ const DriverProfile: React.FC = () => {
     }
 
     try {
-      // TODO: call API to save profileData
-      console.log('Saving profileData', profileData);
-      // simulate success
-      alert('Perfil guardado correctamente');
+      const body: any = {
+        user: {
+          firstName: profileData.firstName,
+          lastName: profileData.lastName,
+          email: profileData.email,
+          phone: profileData.phone
+        },
+        motorcycle: { color: profileData.vehicleInfo.color }
+      };
+
+      // use the redux thunk so the slice handles the API call and mapping
+      const result = await (dispatch(updateDriverProfile(body) as any)).unwrap();
+      // thunk returns { profile, raw } (or in older shape may return profile directly)
+      const data = result?.raw ?? result?.profile ?? result ?? {};
+
+      // handle actions returned by API (if any)
+      const actions = data.actions ?? {};
+      if (actions.user) {
+        if (actions.user.email === 'updated') alert('Correo actualizado correctamente');
+        if (actions.user.phone === 'updated') alert('Teléfono actualizado correctamente');
+      }
+
+      // handle pending documents
+      if (actions.pendingDocuments || data.pendingDocuments) {
+        const pd = actions.pendingDocuments ?? data.pendingDocuments;
+        setPendingDocuments(pd);
+        alert('Tu solicitud quedó en estado Pendiente. Te avisaremos cuando sea aprobada.');
+      }
+
+      // ensure store is in sync (thunk already updated profile but refresh to be safe)
+      await dispatch(getDriverProfile() as any);
       setErrors({});
     } catch (err) {
       console.error(err);
@@ -283,12 +406,104 @@ const DriverProfile: React.FC = () => {
     }
   };
 
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Navbar */}
+        <DriverNavbar profileImage={profileData.profileImage} name={profileData.firstName} />
+        <div className="max-w-6xl mx-auto p-8">
+          <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+            <p className="text-lg font-medium">Cargando perfil...</p>
+            <p className="text-sm text-gray-500 mt-2">Obteniendo información desde el servidor</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <DriverNavbar profileImage={profileData.profileImage} name={profileData.firstName} />
 
       <div className="max-w-6xl mx-auto p-4">
+        {pendingDocuments && pendingDocuments.length > 0 && (
+          <div className="mb-4">
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+              <div className="flex items-start">
+                <div className="ml-2">
+                  <p className="text-sm text-yellow-800 font-medium">Documentos pendientes</p>
+                  <ul className="mt-2 text-sm text-yellow-700">
+                    {pendingDocuments.map((d: any, idx: number) => (
+                      <li key={idx} className="mb-1">
+                        <strong>{d.type ?? d.document_type ?? 'Documento'}</strong> — {d.status ?? d.state ?? 'Pendiente'} {d.requested_at ? `· ${new Date(d.requested_at).toLocaleDateString()}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Document Upload Modal */}
+        {docModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-xl mx-4">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h4 className="font-medium">{docType === 'license' ? 'Renovación de Licencia' : docType === 'soat' ? 'Renovación de SOAT' : 'Revisión Técnica'}</h4>
+                <button onClick={() => setDocModalOpen(false)} className="text-gray-500">Cerrar</button>
+              </div>
+              <div className="p-4 space-y-3">
+                {docType === 'license' && (
+                  <>
+                    <label className="block text-sm">Número de licencia</label>
+                    <input className="w-full p-2 border rounded" value={docForm.license_number ?? ''} onChange={(e) => handleDocInput('license_number', e.target.value)} />
+                    <label className="block text-sm">Fecha de emisión</label>
+                    <input type="date" className="w-full p-2 border rounded" value={docForm.issue_date ?? ''} onChange={(e) => handleDocInput('issue_date', e.target.value)} />
+                    <label className="block text-sm">Fecha de vencimiento</label>
+                    <input type="date" className="w-full p-2 border rounded" value={docForm.expiration_date ?? ''} onChange={(e) => handleDocInput('expiration_date', e.target.value)} />
+                    <label className="block text-sm">Tipo de licencia</label>
+                    <input className="w-full p-2 border rounded" value={docForm.license_type ?? ''} onChange={(e) => handleDocInput('license_type', e.target.value)} />
+                  </>
+                )}
+
+                {docType === 'soat' && (
+                  <>
+                    <label className="block text-sm">Número de póliza</label>
+                    <input className="w-full p-2 border rounded" value={docForm.insurance_policy ?? ''} onChange={(e) => handleDocInput('insurance_policy', e.target.value)} />
+                    <label className="block text-sm">Fecha de vencimiento</label>
+                    <input type="date" className="w-full p-2 border rounded" value={docForm.expiration_date ?? ''} onChange={(e) => handleDocInput('expiration_date', e.target.value)} />
+                    <label className="block text-sm">Placa del vehículo</label>
+                    <input className="w-full p-2 border rounded" value={docForm.vehicle_plate ?? profileData.vehicleInfo.plate ?? ''} onChange={(e) => handleDocInput('vehicle_plate', e.target.value)} />
+                  </>
+                )}
+
+                {docType === 'technical' && (
+                  <>
+                    <label className="block text-sm">Placa</label>
+                    <input className="w-full p-2 border rounded" value={docForm.plate ?? profileData.vehicleInfo.plate ?? ''} onChange={(e) => handleDocInput('plate', e.target.value)} />
+                    <label className="block text-sm">Fecha de revisión</label>
+                    <input type="date" className="w-full p-2 border rounded" value={docForm.review_date ?? ''} onChange={(e) => handleDocInput('review_date', e.target.value)} />
+                    <label className="block text-sm">Vence el</label>
+                    <input type="date" className="w-full p-2 border rounded" value={docForm.expires_at ?? ''} onChange={(e) => handleDocInput('expires_at', e.target.value)} />
+                    <label className="inline-flex items-center mt-2"><input type="checkbox" className="mr-2" checked={!!docForm.passed} onChange={(e) => handleDocInput('passed', e.target.checked)} /> Marcó como Aprobada</label>
+                    <label className="block text-sm">Notas</label>
+                    <textarea className="w-full p-2 border rounded" value={docForm.notes ?? ''} onChange={(e) => handleDocInput('notes', e.target.value)} />
+                  </>
+                )}
+
+                <div>
+                  <label className="block text-sm">Archivo (opcional)</label>
+                  <input type="file" accept="image/*,application/pdf" onChange={handleDocFile} />
+                </div>
+              </div>
+              <div className="p-4 border-t flex justify-end space-x-2">
+                <button onClick={() => setDocModalOpen(false)} className="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onClick={submitDocument} className="px-4 py-2 bg-blue-600 text-white rounded">Enviar</button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Profile Image and Stats */}
           <div className="lg:col-span-1 space-y-6">
@@ -433,7 +648,7 @@ const DriverProfile: React.FC = () => {
                       {errors['dni'] && <p className="text-xs text-red-600 mt-1">{errors['dni']}</p>}
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 616 0z" clipRule="evenodd" />
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 0 1 6 0z" clipRule="evenodd" />
                         </svg>
                       </div>
                     </div>
@@ -502,6 +717,9 @@ const DriverProfile: React.FC = () => {
                         placeholder="120240123456789"
                       />
                       <p className="text-xs text-gray-500 mt-1">Formato: 15 dígitos numéricos</p>
+                      <div className="mt-2">
+                        <button type="button" onClick={() => openDocModal('soat')} className="px-3 py-1 bg-blue-600 text-white rounded text-sm">Solicitar renovación</button>
+                      </div>
                     </div>
 
                     <div>
@@ -558,6 +776,28 @@ const DriverProfile: React.FC = () => {
                   </div>
                 </div>
 
+                  {/* Revisión Técnica (solo mostrar valores) */}
+                  <div className="border-t pt-6">
+                    <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
+                      <svg className="mr-2" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L15 8H9L12 2Z" fill="#4B5563"/></svg>
+                      Revisión Técnica
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de revisión</label>
+                        <input type="text" readOnly value={profileData.technicalReview?.reviewDate ? new Date(profileData.technicalReview.reviewDate).toLocaleDateString() : ''} className="w-full px-3 py-2 bg-gray-200 rounded-md text-gray-600 cursor-not-allowed" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Vence el</label>
+                        <input type="text" readOnly value={profileData.technicalReview?.expiresAt ? new Date(profileData.technicalReview.expiresAt).toLocaleDateString() : ''} className="w-full px-3 py-2 bg-gray-200 rounded-md text-gray-600 cursor-not-allowed" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+                        <input type="text" readOnly value={profileData.technicalReview?.passed ? 'Aprobada' : profileData.technicalReview?.needsRenewal ? 'Necesita renovación' : (profileData.technicalReview?.passed === false ? 'Reprobada' : '')} className="w-full px-3 py-2 bg-gray-200 rounded-md text-gray-600 cursor-not-allowed" />
+                      </div>
+                    </div>
+                  </div>
+
                 {/* Licencia Información */}
                 <div className="border-t pt-6 space-y-4">
                   <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
@@ -577,6 +817,9 @@ const DriverProfile: React.FC = () => {
                         className="w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed"
                         placeholder="L12345678"
                       />
+                      <div className="mt-2">
+                        <button type="button" onClick={() => openDocModal('license')} className="px-3 py-1 bg-blue-600 text-white rounded text-sm">Solicitar renovación</button>
+                      </div>
                     </div>
 
                     <div>

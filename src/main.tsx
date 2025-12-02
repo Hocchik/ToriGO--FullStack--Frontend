@@ -6,7 +6,7 @@ import { store } from './store/index.ts';
 import './styles/tailwind.css';
 import './styles/typografy.css'
 import "./styles/notification.css";
-import "mapbox-gl/dist/mapbox-gl.css";
+// Mapbox removed — maps are provided via Google Maps Platform now.
 
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

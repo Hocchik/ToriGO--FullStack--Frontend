@@ -500,68 +500,140 @@ export const DriverPage = () => {
 
   const startMovingTowards = (target: { lat: number; lng: number }) => {
     stopMovement();
-    movementRef.current = window.setInterval(() => {
-      setDriverLocation((prev) => {
-        if (!prev) return target;
-        // variable step to simulate different speeds (randomized slightly)
-        const baseStep = 0.0006;
-        const variability = 0.6 + Math.random() * 0.8; // 0.6 - 1.4
-        const step = baseStep * variability;
-        const dlat = target.lat - prev.lat;
-        const dlng = target.lng - prev.lng;
-        const dist = Math.sqrt(dlat * dlat + dlng * dlng);
-        if (dist < 0.0005) {
-          // reached
-          // advance phase
-          if (routePhase === 'toPickup') {
-            // notify RideDetails that arrived
-            try { window.dispatchEvent(new CustomEvent('toriGO:arrived')); } catch {}
-            stopMovement();
-            return target;
+
+    // Try to use Google DirectionsService to obtain a realistic street route and animate along it.
+    const tryRouteAndAnimate = async () => {
+      try {
+        if (!(window as any).google || !(window as any).google.maps || !(window as any).google.maps.DirectionsService) throw new Error('No Google Directions');
+        const directionsService = new (window as any).google.maps.DirectionsService();
+        const originPos = driverLocation || { lat: target.lat, lng: target.lng };
+        directionsService.route({ origin: { lat: originPos.lat, lng: originPos.lng }, destination: { lat: target.lat, lng: target.lng }, travelMode: (window as any).google.maps.TravelMode.DRIVING }, (result: any, status: any) => {
+          if (status !== 'OK' || !result) {
+            // fallback to simple movement
+            fallbackLinearMovement();
+            return;
           }
-          if (routePhase === 'toDrop') {
-            // reached destination -> finish trip
-            stopMovement();
-            // finalize trip payload
-            if (activeRide) {
-              const payload = buildFinishPayload(activeRide as any, target, driverLocation);
-              // attach the recorded driver trace without mutating original payload
-              const payloadWithTrace = { ...payload, driverTrace: driverTraceRef.current.slice() };
-              saveTripLocally(payloadWithTrace);
-              try {
-                dispatch(
-                  addTrip({
-                    id: payloadWithTrace.tripId,
-                    driverId: payloadWithTrace.driverId,
-                    passengerId: payloadWithTrace.passengerId,
-                    origin: { lat: payloadWithTrace.origin.coords.lat, lng: payloadWithTrace.origin.coords.lng, address: payloadWithTrace.origin.address },
-                    destination: { lat: payloadWithTrace.destination.coords.lat, lng: payloadWithTrace.destination.coords.lng, address: payloadWithTrace.destination.address },
-                    status: payloadWithTrace.status,
-                    price: payloadWithTrace.price,
-                    startedAt: payloadWithTrace.startedAt,
-                    finishedAt: payloadWithTrace.finishedAt,
-                    raw: payloadWithTrace.raw,
-                    driverTrace: payloadWithTrace.driverTrace,
-                  })
-                );
-              } catch (e) {}
-              // clear trace after saving
-              driverTraceRef.current = [];
-              window.dispatchEvent(new CustomEvent('toriGO:tripFinished'));
+          try {
+            const route = result.routes[0];
+            // build an array of LatLng points from the overview_path (follows streets)
+            const path: Array<{ lat: number; lng: number }> = (route.overview_path || []).map((p: any) => ({ lat: p.lat(), lng: p.lng() }));
+            if (!path.length) { fallbackLinearMovement(); return; }
+
+            // animate along the path
+            let idx = 0;
+            const stepMs = 700; // time per point - adjust for speed
+            movementRef.current = window.setInterval(() => {
+              const next = path[idx];
+              if (!next) {
+                // reached end
+                window.clearInterval(movementRef.current as number);
+                movementRef.current = null;
+                // arrival behavior
+                if (routePhase === 'toPickup') {
+                  try { window.dispatchEvent(new CustomEvent('toriGO:arrived')); } catch {}
+                } else if (routePhase === 'toDrop') {
+                  // finalize trip
+                  if (activeRide) {
+                    const payload = buildFinishPayload(activeRide as any, target, driverLocation);
+                    const payloadWithTrace = { ...payload, driverTrace: driverTraceRef.current.slice() };
+                    saveTripLocally(payloadWithTrace);
+                    try {
+                      dispatch(
+                        addTrip({
+                          id: payloadWithTrace.tripId,
+                          driverId: payloadWithTrace.driverId,
+                          passengerId: payloadWithTrace.passengerId,
+                          origin: { lat: payloadWithTrace.origin.coords.lat, lng: payloadWithTrace.origin.coords.lng, address: payloadWithTrace.origin.address },
+                          destination: { lat: payloadWithTrace.destination.coords.lat, lng: payloadWithTrace.destination.coords.lng, address: payloadWithTrace.destination.address },
+                          status: payloadWithTrace.status,
+                          price: payloadWithTrace.price,
+                          startedAt: payloadWithTrace.startedAt,
+                          finishedAt: payloadWithTrace.finishedAt,
+                          raw: payloadWithTrace.raw,
+                          driverTrace: payloadWithTrace.driverTrace,
+                        })
+                      );
+                    } catch (e) {}
+                    driverTraceRef.current = [];
+                    window.dispatchEvent(new CustomEvent('toriGO:tripFinished'));
+                  }
+                }
+                stopMovement();
+                return;
+              }
+              setDriverLocation(() => {
+                const newPos = next;
+                try { driverTraceRef.current.push({ lat: newPos.lat, lng: newPos.lng, ts: new Date().toISOString() }); } catch (e) {}
+                return newPos;
+              });
+              idx += 1;
+            }, stepMs) as unknown as number;
+          } catch (e) {
+            fallbackLinearMovement();
+          }
+        });
+      } catch (e) {
+        // directions not available or failed -> fallback
+        fallbackLinearMovement();
+      }
+    };
+
+    const fallbackLinearMovement = () => {
+      movementRef.current = window.setInterval(() => {
+        setDriverLocation((prev) => {
+          if (!prev) return target;
+          const baseStep = 0.0006;
+          const variability = 0.6 + Math.random() * 0.8;
+          const step = baseStep * variability;
+          const dlat = target.lat - prev.lat;
+          const dlng = target.lng - prev.lng;
+          const dist = Math.sqrt(dlat * dlat + dlng * dlng);
+          if (dist < 0.0005) {
+            if (routePhase === 'toPickup') {
+              try { window.dispatchEvent(new CustomEvent('toriGO:arrived')); } catch {}
+              stopMovement();
+              return target;
             }
-            return target;
+            if (routePhase === 'toDrop') {
+              stopMovement();
+              if (activeRide) {
+                const payload = buildFinishPayload(activeRide as any, target, driverLocation);
+                const payloadWithTrace = { ...payload, driverTrace: driverTraceRef.current.slice() };
+                saveTripLocally(payloadWithTrace);
+                try {
+                  dispatch(
+                    addTrip({
+                      id: payloadWithTrace.tripId,
+                      driverId: payloadWithTrace.driverId,
+                      passengerId: payloadWithTrace.passengerId,
+                      origin: { lat: payloadWithTrace.origin.coords.lat, lng: payloadWithTrace.origin.coords.lng, address: payloadWithTrace.origin.address },
+                      destination: { lat: payloadWithTrace.destination.coords.lat, lng: payloadWithTrace.destination.coords.lng, address: payloadWithTrace.destination.address },
+                      status: payloadWithTrace.status,
+                      price: payloadWithTrace.price,
+                      startedAt: payloadWithTrace.startedAt,
+                      finishedAt: payloadWithTrace.finishedAt,
+                      raw: payloadWithTrace.raw,
+                      driverTrace: payloadWithTrace.driverTrace,
+                    })
+                  );
+                } catch (e) {}
+                driverTraceRef.current = [];
+                window.dispatchEvent(new CustomEvent('toriGO:tripFinished'));
+              }
+              return target;
+            }
           }
-        }
-        const nx = prev.lat + (dlat / dist) * step;
-        const ny = prev.lng + (dlng / dist) * step;
-        const newPos = { lat: nx, lng: ny };
-        // record trace point
-        try {
-          driverTraceRef.current.push({ lat: newPos.lat, lng: newPos.lng, ts: new Date().toISOString() });
-        } catch (e) {}
-        return newPos;
-      });
-    }, 800);
+          const nx = prev.lat + (dlat / dist) * step;
+          const ny = prev.lng + (dlng / dist) * step;
+          const newPos = { lat: nx, lng: ny };
+          try { driverTraceRef.current.push({ lat: newPos.lat, lng: newPos.lng, ts: new Date().toISOString() }); } catch (e) {}
+          return newPos;
+        });
+      }, 800) as unknown as number;
+    };
+
+    // start route animation
+    tryRouteAndAnimate();
   };
 
   // Build JSON payloads for finished and cancelled trips
@@ -695,6 +767,8 @@ export const DriverPage = () => {
   // Listen for events from RideDetails (trip finished -> open requests)
   useEffect(() => {
     const onFinished = () => {
+      // stop any movement and clear active ride when trip finishes
+      try { stopMovement(); } catch (e) {}
       setActiveRide(null);
       setRequestPanelOpen(true);
     };
@@ -715,13 +789,23 @@ export const DriverPage = () => {
       console.log('Simulated: driver arrived to pickup');
     };
 
+    const onCanceled = () => {
+      // stop movement and clear active ride on cancel
+      try { stopMovement(); } catch (e) {}
+      setActiveRide(null);
+      setRequestPanelOpen(true);
+      console.log('Trip canceled - stopping movement');
+    };
+
     window.addEventListener('toriGO:tripStarted', onTripStarted as EventListener);
     window.addEventListener('toriGO:arrived', onArrivedEvent as EventListener);
+    window.addEventListener('toriGO:tripCanceled', onCanceled as EventListener);
     return () => {
       window.removeEventListener("toriGO:tripFinished", onFinished as EventListener);
       window.removeEventListener("toriGO:openRequests", onOpenRequests as EventListener);
       window.removeEventListener('toriGO:tripStarted', onTripStarted as EventListener);
       window.removeEventListener('toriGO:arrived', onArrivedEvent as EventListener);
+      window.removeEventListener('toriGO:tripCanceled', onCanceled as EventListener);
     };
   }, []);
 
@@ -775,6 +859,7 @@ export const DriverPage = () => {
                         destination={(activeRide as any).dropCoords}
                         driverLocation={driverLocation}
                         showRoute={routePhase !== 'idle'}
+                        showMarkers={true}
                       />
                     </div>
                   ) : (
@@ -786,6 +871,7 @@ export const DriverPage = () => {
                           destination={{ lat: -12.0500, lng: -77.0300 }}
                           driverLocation={driverLocation || { lat: -12.0460, lng: -77.0425 }}
                           showRoute={false}
+                          showMarkers={false}
                         />
                     </div>
                   )}

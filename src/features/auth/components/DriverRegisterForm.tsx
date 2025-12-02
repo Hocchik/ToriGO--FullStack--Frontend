@@ -85,10 +85,12 @@ export const DriverRegisterForm = () => {
     last_name: '',
     dni: '',
     plate: '',
+    color: '',
     license_number: '',
     license_expiration_date: '',
     insurance_policy_number: 'SOAT-',
     insurance_policy_expiration_date: '',
+    technical_review_date: '',
     email: '',
     phone: '',
     password: '',
@@ -156,10 +158,11 @@ export const DriverRegisterForm = () => {
     setError(null);
     // Validación básica del Step 1
     if (!formData.name || !formData.last_name || !formData.dni || 
-        !formData.plate || !formData.license_number || 
+        !formData.plate || !formData.color || !formData.license_number || 
         !formData.license_expiration_date || 
         !formData.insurance_policy_number || 
-        !formData.insurance_policy_expiration_date) {
+        !formData.insurance_policy_expiration_date ||
+        !formData.technical_review_date) {
       setError('Por favor complete todos los campos del paso 1');
       console.error('Por favor complete todos los campos del paso 1');
       return;
@@ -391,6 +394,24 @@ export const DriverRegisterForm = () => {
                 required
               />
             </div>
+
+            {/* Color del vehículo */}
+            <div className={driverRegisterStyles.inputGroup}>
+              <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Color del vehículo
+              </label>
+              <input
+                type="text"
+                name="color"
+                value={formData.color}
+                onChange={handleInputChange}
+                placeholder="Negro"
+                className={driverRegisterStyles.input}
+                style={{ fontFamily: 'Montserrat, sans-serif' }}
+                maxLength={30}
+                required
+              />
+            </div>
             {/* Licencia */}
             <div className={driverRegisterStyles.inputGroup}>
               <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -405,6 +426,21 @@ export const DriverRegisterForm = () => {
                 className={driverRegisterStyles.input}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
                 maxLength={9}
+                required
+              />
+            </div>
+            {/* Revisión Técnica (Fecha) */}
+            <div className={driverRegisterStyles.inputGroup}>
+              <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Fecha de Revisión Técnica
+              </label>
+              <input
+                type="date"
+                name="technical_review_date"
+                value={formData.technical_review_date ?? ''}
+                onChange={handleInputChange}
+                className={driverRegisterStyles.input}
+                style={{ fontFamily: 'Montserrat, sans-serif' }}
                 required
               />
             </div>

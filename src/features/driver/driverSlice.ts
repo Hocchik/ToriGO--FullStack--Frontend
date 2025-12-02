@@ -1,6 +1,21 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import TripService from '../../services/TripService';
+import * as DriverService from '../../services/DriverService';
+
+interface DriverProfile {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  profileImage?: string;
+  vehicleInfo?: any;
+  licenseNumber?: string;
+  soatNumber?: string;
+  technicalReview?: any;
+  [k: string]: any;
+}
 
 export interface TripRecord {
   id: string;
@@ -23,12 +38,65 @@ export interface TripRecord {
 interface DriverState {
   trips: TripRecord[];
   availability: 'offline' | 'available' | 'busy';
+  profile: DriverProfile | null;
+  pendingDocuments: any[];
+  loadingProfile: boolean;
+  profileError?: string | null;
 }
 
 const initialState: DriverState = {
   trips: [],
   availability: 'offline',
+  profile: null,
+  pendingDocuments: [],
+  loadingProfile: false,
+  profileError: null,
 };
+
+const mapProfileResponse = (data: any): DriverProfile => {
+  const user = data?.user ?? data ?? {};
+  const driver = data?.driver ?? {};
+  const motorcycle = data?.motorcycle ?? data?.motorcycle_info ?? data?.vehicle ?? {};
+
+  return {
+    id: (user.id ?? driver.id ?? data.id) as string || undefined,
+    firstName: (user.firstName ?? user.first_name ?? user.name ?? user.full_name) ?? undefined,
+    lastName: (user.lastName ?? user.last_name ?? user.surname) ?? undefined,
+    email: (user.email ?? user.email_address ?? user.contact_email) ?? undefined,
+    phone: (user.phone ?? user.phone_number ?? user.mobile) ?? undefined,
+    profileImage: (user.profileImage ?? user.avatar ?? user.profile_image) ?? undefined,
+    licenseNumber: (driver.licenseNumber ?? driver.license_number ?? driver.driver_license) as string,
+    soatNumber: (motorcycle.soat ?? motorcycle.soatNumber ?? motorcycle.soat_number) as string,
+    technicalReview: data.technical_review ?? { reviewDate: motorcycle.technical_review_date },
+    vehicleInfo: {
+      plate: motorcycle.plate ?? motorcycle.vehicle_plate ?? motorcycle.plate_number,
+      color: motorcycle.color ?? motorcycle.colour ?? motorcycle.vehicle_color,
+    },
+    // include raw for any additional use
+    raw: data,
+  };
+};
+
+export const getDriverProfile = createAsyncThunk('driver/getProfile', async (_, { rejectWithValue }) => {
+  try {
+    const res = await DriverService.getMyProfile();
+    const data = res.data ?? {};
+    return mapProfileResponse(data);
+  } catch (err: any) {
+    return rejectWithValue(err?.response?.data || err?.message || 'Failed to fetch profile');
+  }
+});
+
+export const updateDriverProfile = createAsyncThunk('driver/updateProfile', async (body: any, { rejectWithValue }) => {
+  try {
+    const res = await DriverService.updateMyProfile(body);
+    const data = res.data ?? {};
+    // return both the mapped profile and the raw response so callers can inspect actions/pendingDocuments
+    return { profile: mapProfileResponse(data), raw: data };
+  } catch (err: any) {
+    return rejectWithValue(err?.response?.data || err?.message || 'Failed to update profile');
+  }
+});
 
 const driverSlice = createSlice({
   name: 'driver',
@@ -43,21 +111,49 @@ const driverSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(setDriverAvailability.pending, (state) => {
+      // availability handlers (from TripService)
+      .addCase(setDriverAvailability.pending, (_state) => {
         // while pending, keep previous availability
       })
       .addCase(setDriverAvailability.fulfilled, (state, action) => {
-        // server may return { availability: 'available' }
         if (action.payload && (action.payload.availability || action.payload.status)) {
           state.availability = (action.payload.availability || action.payload.status) as any;
         }
       })
       .addCase(setDriverAvailability.rejected, (state) => {
-        // on failure keep offline as fallback
         state.availability = 'offline';
+      })
+
+      // profile handlers
+      .addCase(getDriverProfile.pending, (state) => {
+        state.loadingProfile = true;
+        state.profileError = null;
+      })
+      .addCase(getDriverProfile.fulfilled, (state, action: PayloadAction<any>) => {
+        state.loadingProfile = false;
+        state.profile = action.payload;
+      })
+      .addCase(getDriverProfile.rejected, (state, action: any) => {
+        state.loadingProfile = false;
+        state.profileError = action.payload ?? action.error?.message;
+      })
+
+      .addCase(updateDriverProfile.pending, (state) => {
+        state.loadingProfile = true;
+      })
+      .addCase(updateDriverProfile.fulfilled, (state, action: PayloadAction<any>) => {
+        state.loadingProfile = false;
+        // thunk may return { profile, raw } or a raw profile object
+        state.profile = (action.payload && action.payload.profile) ? action.payload.profile : action.payload;
+      })
+      .addCase(updateDriverProfile.rejected, (state, action: any) => {
+        state.loadingProfile = false;
+        state.profileError = action.payload ?? action.error?.message;
       });
   },
 });
+
+// (profile thunks wired in createSlice.extraReducers above)
 
 // Thunk to set driver availability via backend
 export const setDriverAvailability = createAsyncThunk(
@@ -86,11 +182,7 @@ export const acceptTrip = createAsyncThunk(
   }
 );
 
-// update availability in reducers when thunk resolves
-driverSlice.reducer && (function attachExtra() {
-  const _orig = driverSlice.reducer;
-  // we won't replace the reducer here; the extra reducers will be consumed by the store via slice.extraReducers if used.
-})();
+// no-op: extraReducers are already attached via createSlice above
 
 export const { addTrip, clearTrips } = driverSlice.actions;
 export default driverSlice.reducer;
