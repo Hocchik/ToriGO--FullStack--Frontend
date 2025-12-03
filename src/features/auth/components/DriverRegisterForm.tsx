@@ -96,6 +96,12 @@ export const DriverRegisterForm = () => {
     password: '',
     role: 'DRIVER'
   });
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setProfileImageFile(f);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -200,6 +206,23 @@ export const DriverRegisterForm = () => {
       console.error('El SOAT debe tener el formato SOAT-1234-AB-2024');
       return;
     }
+    // Validate profile image presence and basic checks
+    if (!profileImageFile) {
+      setError('Debe subir una foto de perfil');
+      console.error('Debe subir una foto de perfil');
+      return;
+    }
+    if (!profileImageFile.type.startsWith('image/')) {
+      setError('El archivo debe ser una imagen');
+      console.error('El archivo debe ser una imagen');
+      return;
+    }
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (profileImageFile.size > maxSize) {
+      setError('La imagen debe pesar menos de 5MB');
+      console.error('La imagen debe pesar menos de 5MB');
+      return;
+    }
     // Verificación con backend usando AuthService (separado)
     try {
       // Verificar Licencia
@@ -250,22 +273,43 @@ export const DriverRegisterForm = () => {
       setLoading(false);
       return;
     }
-    try {
+      try {
       // Formatear el teléfono antes de enviar
-      let phone = formData.phone;
+      const rawPhone = formData.phone; // digits only (from input)
+      let formattedPhone = rawPhone;
       if (selectedCountry === '+51') {
-        if (!phone.startsWith('+51 ')) {
-          phone = `+51 ${phone}`;
+        if (!formattedPhone.startsWith('+51 ')) {
+          formattedPhone = `+51 ${rawPhone}`;
         }
       } else {
-        if (!phone.startsWith(selectedCountry)) {
-          phone = `${selectedCountry} ${phone}`;
+        if (!formattedPhone.startsWith(selectedCountry)) {
+          formattedPhone = `${selectedCountry} ${rawPhone}`;
         }
       }
-      const payload = { ...formData, phone };
+
+      // Keep primitive values for fallbacks (avoid reading from FormData)
+      const effectivePhone = formattedPhone;
+      const effectivePassword = formData.password;
+
+      // prepare payload; if there's a profile image, send FormData
+      let payload: any = { ...formData, phone: formattedPhone };
+      if (profileImageFile) {
+        const fd = new FormData();
+        for (const [k, v] of Object.entries(payload)) {
+          if (v !== undefined && v !== null) fd.append(k, String(v));
+        }
+        fd.append('profile_image', profileImageFile);
+        payload = fd;
+      }
       try {
-        const dispatched = await dispatch(registerDriver(payload));
-        const resp = unwrapResult(dispatched) as any;
+        let resp: any = null;
+        if (typeof FormData !== 'undefined' && payload instanceof FormData) {
+          // send directly, avoid serializing FormData through Redux
+          resp = await authService.registerDriver(payload as any);
+        } else {
+          const dispatched = await dispatch(registerDriver(payload));
+          resp = unwrapResult(dispatched) as any;
+        }
         // If backend returned token + user, persist and redirect immediately
         if (resp && resp.token && resp.user) {
           try {
@@ -275,13 +319,13 @@ export const DriverRegisterForm = () => {
           return;
         }
 
-        // Otherwise attempt login as a fallback
-        let emailorphone = payload.phone.trim();
-        if (/^\d{9}$/.test(payload.phone)) {
-          emailorphone = `+51 ${payload.phone}`;
+        // Otherwise attempt login as a fallback using primitive values
+        let emailorphone = effectivePhone;
+        if (/^\d{9}$/.test(rawPhone)) {
+          emailorphone = `+51 ${rawPhone}`;
         }
         try {
-          const loginDispatched = await dispatch(loginUser({ emailorphone, password: payload.password }));
+          const loginDispatched = await dispatch(loginUser({ emailorphone, password: effectivePassword }));
           const loginResp = unwrapResult(loginDispatched) as any;
           if (loginResp && loginResp.token && loginResp.user) {
             try { saveAuthData(loginResp.token, loginResp.user, loginResp.role || 'DRIVER'); } catch (e) {}
@@ -294,9 +338,18 @@ export const DriverRegisterForm = () => {
           console.error(loginError);
         }
       } catch (regErr) {
-        const errorMsg = (regErr as any)?.message || 'Error al registrar conductor';
+        // extract possible error message from thunk / axios
+        let errorMsg = 'Error al registrar conductor';
+        try {
+          if ((regErr as any)?.payload) errorMsg = (regErr as any).payload as string;
+          else if ((regErr as any)?.message) errorMsg = (regErr as any).message as string;
+          else if ((regErr as any)?.response?.data) {
+            const d = (regErr as any).response.data;
+            errorMsg = d.error || d.message || JSON.stringify(d);
+          }
+        } catch (e) {}
         setError(errorMsg);
-        console.error('Register driver error', regErr);
+        console.error('Register driver error', regErr, (regErr as any)?.response?.data ?? null);
       }
     } catch (err) {
       setError('Error inesperado al registrar conductor');
@@ -304,8 +357,6 @@ export const DriverRegisterForm = () => {
     }
     setLoading(false);
   };
-
-  
 
   const goBackToStep1 = () => {
     setStep(1);
@@ -393,6 +444,15 @@ export const DriverRegisterForm = () => {
                 maxLength={7}
                 required
               />
+            </div>
+
+            {/* Foto de perfil (obligatoria) */}
+            <div className={driverRegisterStyles.inputGroup}>
+              <label className={driverRegisterStyles.label} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Foto de Perfil (rostro)
+              </label>
+              <input type="file" accept="image/*" onChange={handleProfileImageChange} className={driverRegisterStyles.input} />
+              <p className="text-xs text-gray-500 mt-1">Debe subir una foto clara del rostro (máx 5MB).</p>
             </div>
 
             {/* Color del vehículo */}

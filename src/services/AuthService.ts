@@ -38,9 +38,10 @@ export const authService = {
     return data;
   },
 
-  changePassword: async(resetPasswordData: LoginRequest): Promise<any> => {
-    console.log(`Reset Password Data received in service: ${resetPasswordData.emailorphone}, ${resetPasswordData.password}`);
-    const { data } = await apiClient.post('/password/confirm-reset', resetPasswordData);
+  changePassword: async ({ email, token, newPassword }: { email: string; token: string; newPassword: string }): Promise<any> => {
+    console.log(`Reset Password Data received in service: ${email}, token: ${token}`);
+    const payload = { email, token, newPassword };
+    const { data } = await apiClient.post('/password/confirm-reset', payload);
     console.log(`dataaa: ${data.message}`);
     return data;
   },
@@ -83,11 +84,17 @@ export const authService = {
 
   registerDriver: async (payload: registerDriverRequest): Promise<LoginResponse> => {
     console.log('Registering driver with payload:', payload);
-    const { data } = await apiClient.post('/auth/register/driver', payload, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    // If payload is FormData (contains file), send multipart/form-data
+    if (typeof FormData !== 'undefined' && payload instanceof FormData) {
+      const { data } = await apiClient.post('/auth/register/driver', payload, {
+        headers: {
+          // let axios/browser set the proper boundary
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return data;
+    }
+    const { data } = await apiClient.post('/auth/register/driver', payload as any);
     return data;
   },
 

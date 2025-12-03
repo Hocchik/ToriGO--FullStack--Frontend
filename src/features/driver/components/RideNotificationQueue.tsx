@@ -82,7 +82,7 @@ export default function RideNotificationQueue({ requests, onAccept, onExpire }: 
             Tarifa:
         </p>
         <p className="font-extrabold text-xl text-red-700">
-            S/. {current.price.toFixed(2)}
+          S/. {(((current as any).price ?? (current as any).price_snapshot?.estimated_fare) !== undefined && ((current as any).price ?? (current as any).price_snapshot?.estimated_fare) !== null) ? Number((current as any).price ?? (current as any).price_snapshot?.estimated_fare).toFixed(2) : '—'}
         </p>
     </div>
   </div>

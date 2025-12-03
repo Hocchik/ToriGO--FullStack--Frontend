@@ -11,6 +11,7 @@ export interface SoatPayload {
   insurance_policy: string;
   expiration_date: string;
   vehicle_plate: string;
+  insurer?: string;
 }
 
 export interface TechnicalReviewPayload {
@@ -38,13 +39,13 @@ apiClient.interceptors.request.use((config) => {
 });
 
 export const getMyProfile = async () => {
-  const { data } = await apiClient.get('/drivers/me');
-  return data;
+  // return full axios response so callers can access `.data` consistently
+  return apiClient.get('/drivers/me');
 };
 
 export const updateMyProfile = async (body: any) => {
-  const { data } = await apiClient.put('/drivers/me', body);
-  return data;
+  // return full axios response
+  return apiClient.put('/drivers/me', body);
 };
 
 export const postLicense = async (payload: LicensePayload | FormData) => {
@@ -71,6 +72,16 @@ export const postTechnicalReview = async (payload: TechnicalReviewPayload | Form
     return data;
   }
   const { data } = await apiClient.post('/drivers/documents/technical-review', payload);
+  return data;
+};
+
+export const uploadProfilePhoto = async (formData: FormData) => {
+  const { data } = await apiClient.post('/drivers/me/photo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+};
+
+export const disableMyAccount = async () => {
+  const { data } = await apiClient.post('/drivers/me/disable');
   return data;
 };
 

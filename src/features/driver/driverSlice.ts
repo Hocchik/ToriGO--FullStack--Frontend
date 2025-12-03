@@ -67,6 +67,8 @@ const mapProfileResponse = (data: any): DriverProfile => {
     profileImage: (user.profileImage ?? user.avatar ?? user.profile_image) ?? undefined,
     licenseNumber: (driver.licenseNumber ?? driver.license_number ?? driver.driver_license) as string,
     soatNumber: (motorcycle.soat ?? motorcycle.soatNumber ?? motorcycle.soat_number) as string,
+    soatInsurer: (motorcycle.soat_insurer ?? motorcycle.soatInsurer ?? motorcycle.insurer) as string | undefined,
+    soatExpiryDate: (motorcycle.soat_expiry_date ?? motorcycle.soatExpiryDate) ?? undefined,
     technicalReview: data.technical_review ?? { reviewDate: motorcycle.technical_review_date },
     vehicleInfo: {
       plate: motorcycle.plate ?? motorcycle.vehicle_plate ?? motorcycle.plate_number,

@@ -83,8 +83,8 @@ export const registerDriver = createAsyncThunk(
       return response;
     } catch (error: unknown) {
       if (typeof error === 'object' && error !== null && 'response' in error) {
-        const err = error as { response?: { data?: { message?: string } } };
-        return rejectWithValue(err.response?.data?.message || 'Error de conexión');
+        const err = error as { response?: { data?: { message?: string; error?: string } } };
+        return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Error de conexión');
       }
 
       return rejectWithValue('Error inesperado');

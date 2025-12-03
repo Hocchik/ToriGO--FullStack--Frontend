@@ -38,7 +38,8 @@ export default function RideDetails({ ride, onCancel, onArrived, onPaid }: Props
   }, [ride.drop, ride.pickup]);
 
   const passenger = ride.passenger ?? { id: "", name: "Pasajero", rating: 0 };
-  const fare = typeof (ride as any).price === "number" ? (ride as any).price : undefined;
+  const fare = typeof (ride as any).price === "number" ? (ride as any).price : (ride as any).price_snapshot?.estimated_fare;
+  const vehiclePlate = (ride as any).driver_info?.motorcycle?.plate ?? (ride as any).vehicle_plate ?? '';
 
   // Handlers advance state and call parent callbacks where applicable
   const handleArrived = () => {
@@ -79,6 +80,7 @@ export default function RideDetails({ ride, onCancel, onArrived, onPaid }: Props
           </div>
           <div className="text-right">
             <div className="text-sm font-semibold text-gray-800">⭐ {Number(passenger.rating || 0).toFixed(1)}</div>
+            {vehiclePlate && <div className="text-xs text-gray-500">Placa: <span className="font-medium text-gray-900">{vehiclePlate}</span></div>}
           </div>
         </div>
 

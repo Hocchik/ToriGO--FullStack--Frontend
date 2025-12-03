@@ -136,7 +136,7 @@ export default function RequestList({ requests, onAccept, onStopSearch, showPrev
               </span>
               {/* CAMBIADO: text-lg en el valor (sigue siendo grande para destacar, pero menos) */}
               <span className="font-extrabold text-lg text-red-700">
-                S/. {req.price.toFixed(2)}
+                S/. {((req as any).price ?? (req as any).price_snapshot?.estimated_fare) ? Number((req as any).price ?? (req as any).price_snapshot?.estimated_fare).toFixed(2) : '—'}
               </span>
             </p>
           </div>

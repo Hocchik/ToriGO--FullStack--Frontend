@@ -1,21 +1,21 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   Star,
   MapPin,
   Calendar,
-  Home,
-  LogOut,
-  Menu,
   Shield,
   CreditCard,
   UserCircle,
-  Clock
+  Check,
+  X,
+  Loader2,
+  Truck,
 } from 'lucide-react';
-import logoNavbar from '../../../assets/logoNavbar.png';
+import TopBar from '../../../components/TopBar';
 import iconMoto from '../../../assets/iconmoto.png';
 import { postLicense, postSoat, postTechnicalReview } from '../../../services/DriverService';
+import { disableMyAccount } from '../../../services/DriverService';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { getDriverProfile, updateDriverProfile } from '../driverSlice';
 
@@ -57,116 +57,7 @@ interface DriverData {
   achievements: string[];
 }
 
-/* --- Navbar --- */
-export const DriverNavbar: React.FC<{ profileImage?: string; name?: string }> = ({ profileImage, name }) => {
-  const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleLogout = () => {
-    // limpia almacenamiento local y redirige a login
-    localStorage.removeItem('token');
-    // si usas redux, aquí podrías dispatch(logout())
-    navigate('/auth/login');
-  };
-
-  return (
-    <header className="bg-red-400">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="h-16 flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center space-x-3">
-              <div className="h-12 w-12 sm:h-20 sm:w-20 rounded-full flex items-center justify-center overflow-hidden">
-              <img 
-                src={logoNavbar} 
-                alt="ToroGo Logo" 
-                className="w-full h-full object-contain"
-              />
-            </div>
-          </Link>
-
-          {/* Right: CTA + Profile */}
-          <div className="flex items-center space-x-4">
-            <Link
-              to="/driver/request-trip"
-              className="hidden sm:inline-block bg-white text-red-500 px-4 py-2 rounded-full text-sm font-medium hover:opacity-90 transition"
-            >
-              INICIA TU VIAJE
-            </Link>
-
-            <div className="relative" ref={ref}>
-              <button
-                onClick={() => setOpen(o => !o)}
-                aria-haspopup="true"
-                aria-expanded={open}
-                className="flex items-center space-x-3 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full text-white focus:outline-none"
-              >
-                <div className="w-9 h-9 rounded-full bg-white/30 overflow-hidden flex items-center justify-center">
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/30 overflow-hidden flex items-center justify-center">
-                  {profileImage ? (
-                    <img src={profileImage} alt="avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <User size={18} className="text-white" />
-                  )}
-                </div>
-                </div>
-                <span className="hidden sm:block text-sm">{name ?? 'Mi Cuenta'}</span>
-                <Menu size={16} className="text-white" />
-              </button>
-
-              {/* Menú despegable */}
-              {open && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-50">
-                  <nav className="py-1">
-                    <Link
-                      to="/driver/dashboard"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      <Home size={16} /> Inicio
-                    </Link>
-
-                    <Link
-                      to="/driver/trip-history"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      <Clock size={16} /> Historial de viajes
-                    </Link>
-
-                    <Link
-                      to="/profile/driver"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      <User size={16} /> Perfil
-                    </Link>
-
-                    <button
-                      onClick={handleLogout}
-                      className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
-                    >
-                      <LogOut size={16} /> Cerrar Sesión
-                    </button>
-                  </nav>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-};
-/* --- Fin Navbar --- */
+/* Navbar is now provided by shared TopBar component */
 
 const DriverProfile: React.FC = () => {
   /* const [isEditing, setIsEditing] = useState(false); */
@@ -204,13 +95,16 @@ const DriverProfile: React.FC = () => {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [notification, setNotification] = useState<{ visible: boolean; status: 'idle'|'loading'|'success'|'error'; message: string }>({ visible: false, status: 'idle', message: '' });
   const [pendingDocuments, setPendingDocuments] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<string[]>([]);
   const [loadingProfile, setLoadingProfile] = useState<boolean>(true);
   const dispatch = useAppDispatch();
   const storedProfile = useAppSelector(s => s.driver.profile);
   const storeLoading = useAppSelector(s => s.driver.loadingProfile);
+  const originalProfileRef = useRef<any>(null);
   
-  console.log(getDriverProfile());
+  // helper debug: show thunk reference (kept for dev) and provide quick notice
 
   useEffect(() => {
     // fetch profile into redux on mount
@@ -221,8 +115,107 @@ const DriverProfile: React.FC = () => {
   // when store profile changes, populate local editable state and pending docs
   useEffect(() => {
     if (storedProfile) {
-      setProfileData(prev => ({ ...prev, ...(storedProfile as any) } as DriverData));
-      if (storedProfile.raw?.pendingDocuments) setPendingDocuments(storedProfile.raw.pendingDocuments);
+      // normalize incoming dates so date inputs receive YYYY-MM-DD and displays are friendly
+      const sp: any = storedProfile as any;
+      // DEBUG: print entire stored profile and raw payload coming from the API
+      try {
+       /*  console.log('[DriverProfile] storedProfile (redux):', sp);
+        console.log('[DriverProfile] storedProfile.raw:', sp.raw ?? null);
+        console.log('[DriverProfile] storedProfile.raw.user:', sp.raw?.user ?? null);
+        console.log('[DriverProfile] storedProfile.raw.driver:', sp.raw?.driver ?? null);
+        console.log('[DriverProfile] storedProfile.raw.motorcycle:', sp.raw?.motorcycle ?? null);
+        console.log('[DriverProfile] storedProfile.raw.technical_review:', sp.raw?.technical_review ?? sp.raw?.technicalReview ?? null); */
+      } catch (e) {
+        console.warn('[DriverProfile] error printing storedProfile debug logs', e);
+      }
+      const toInputDate = (d: any) => {
+        try {
+          if (!d) return undefined;
+          const dt = new Date(d);
+          if (isNaN(dt.getTime())) return undefined;
+          return dt.toISOString().slice(0, 10);
+        } catch (e) { return undefined; }
+      };
+
+      const normalized: any = { ...(sp as any) };
+      // ensure dni is populated from raw user object if available
+      normalized.dni = sp.dni ?? sp.raw?.user?.dni ?? sp.raw?.dni ?? sp.user?.dni ?? normalized.dni;
+      // only overwrite date fields when we have a valid value
+      const soatExpiry = toInputDate(sp.soatExpiryDate ?? sp.raw?.motorcycle?.soat_expiry_date ?? sp.raw?.motorcycle?.soatExpiryDate);
+      if (soatExpiry) normalized.soatExpiryDate = soatExpiry;
+
+      const licenseIssue = toInputDate(sp.licenseIssueDate ?? sp.raw?.driver?.license_info?.issue_date);
+      if (licenseIssue) normalized.licenseIssueDate = licenseIssue;
+
+      const licenseExpiry = toInputDate(sp.licenseExpiryDate ?? sp.raw?.driver?.license_info?.expiration_date ?? sp.raw?.driver?.license_info?.expires_at);
+      if (licenseExpiry) normalized.licenseExpiryDate = licenseExpiry;
+
+      // determine license status based on expiry proximity
+      try {
+        if (normalized.licenseExpiryDate) {
+          const exp = new Date(normalized.licenseExpiryDate);
+          const today = new Date();
+          const diffMs = exp.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          if (diffDays < 0) normalized.licenseStatus = 'Vencida';
+          else if (diffDays <= 30) normalized.licenseStatus = 'Por vencer';
+          else normalized.licenseStatus = 'Vigente';
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // technical review dates
+      const tr = sp.technicalReview ?? sp.raw?.technical_review ?? {};
+      const trReview = toInputDate(tr.review_date ?? tr.reviewDate ?? sp.raw?.motorcycle?.technical_review_date);
+      const trExpires = toInputDate(tr.expires_at ?? tr.expiresAt ?? '');
+      normalized.technicalReview = {
+        reviewDate: trReview ?? (sp.technicalReview?.reviewDate ?? undefined),
+        expiresAt: trExpires ?? (sp.technicalReview?.expiresAt ?? undefined),
+        passed: tr.passed ?? sp.technicalReview?.passed ?? null,
+        needsRenewal: tr.needsRenewal ?? sp.technicalReview?.needsRenewal ?? false,
+      };
+
+      // map trips / rating from multiple possible shapes returned by API
+      const totalTrips = sp.totalTrips ?? sp.total_trips ?? sp.raw?.totalTrips ?? sp.raw?.tripsCount ?? sp.raw?.trips_count ?? normalized.totalTrips ?? 0;
+      const rating = sp.rating ?? sp.avgRating ?? sp.raw?.rating ?? sp.raw?.avg_rating ?? normalized.rating ?? 0;
+
+      setProfileData(prev => ({
+        ...prev,
+        ...normalized,
+        totalTrips: totalTrips ?? prev.totalTrips,
+        rating: rating ?? prev.rating,
+        vehicleInfo: {
+          ...(prev.vehicleInfo || {}),
+          ...(normalized.vehicleInfo || {})
+        },
+        technicalReview: {
+          ...(prev.technicalReview || {}),
+          ...(normalized.technicalReview || {})
+        }
+      } as DriverData));
+      // keep a copy of the original normalized profile to compare changes later
+      originalProfileRef.current = normalized;
+      if (sp.raw?.pendingDocuments) setPendingDocuments(sp.raw.pendingDocuments);
+
+      // generate alerts for notifications area
+      const newAlerts: string[] = [];
+      if (normalized.licenseExpiryDate) {
+        const exp = new Date(normalized.licenseExpiryDate);
+        const today = new Date();
+        const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) newAlerts.push('Tu licencia está vencida');
+        else if (diffDays <= 30) newAlerts.push('Tu licencia está por vencer');
+      }
+      const soatExp = normalized.soatExpiryDate ?? sp.raw?.motorcycle?.soat_expiry_date;
+      if (soatExp) {
+        const exp = new Date(soatExp);
+        const diffDays = Math.ceil((exp.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) newAlerts.push('Tu SOAT está vencido');
+        else if (diffDays <= 30) newAlerts.push('Tu SOAT está por vencer');
+      }
+      if (normalized.technicalReview?.needsRenewal) newAlerts.push('Tu revisión técnica necesita atención');
+      setAlerts(newAlerts);
     }
     // keep loading flag synced
     setLoadingProfile(storeLoading);
@@ -232,16 +225,49 @@ const DriverProfile: React.FC = () => {
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setProfileData(prev => ({
-          ...prev,
-          profileImage: e.target?.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // accept avif explicitly as well as other image types
+    if (!file.type.startsWith('image/') && !file.name.toLowerCase().endsWith('.avif')) {
+      alert('El archivo debe ser una imagen (jpg, png, webp, avif, ...).');
+      return;
     }
+
+    // Preview using object URL (better support for modern formats like .avif)
+    const url = URL.createObjectURL(file);
+    setProfileData(prev => ({ ...prev, profileImage: url }));
+
+    // Upload to backend (fire-and-forget, then refresh canonical URL)
+    (async () => {
+      try {
+        const fd = new FormData();
+        fd.append('profile_image', file);
+        // dynamic import to avoid circular deps
+        const { uploadProfilePhoto } = await import('../../../services/DriverService');
+        const res = await uploadProfilePhoto(fd as any);
+        if (res && res.profile_image) {
+          // refresh profile from server to get the canonical URL (which may be served under /uploads)
+          await dispatch(getDriverProfile() as any);
+        }
+      } catch (err) {
+        console.error('Failed to upload profile photo', err);
+        alert('No se pudo subir la foto de perfil');
+      } finally {
+        // revoke object URL after a short delay to allow browser to show it
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 5000);
+      }
+    })();
+  };
+
+  // helper to convert server relative paths to absolute URLs
+  const resolveImageUrl = (img?: string | null) => {
+    if (!img) return undefined;
+    try {
+      if (img.startsWith('http') || img.startsWith('data:')) return img;
+      if (img.startsWith('/')) return `${window.location.origin}${img}`;
+      // some backends may return relative without leading slash
+      return `${window.location.origin}/${img}`;
+    } catch (e) { return img; }
   };
 
   // Document upload modal state
@@ -250,8 +276,19 @@ const DriverProfile: React.FC = () => {
   const [docForm, setDocForm] = useState<Record<string, any>>({});
   const [docFile, setDocFile] = useState<File | null>(null);
 
+  // Disable account confirmation modal
+  const [confirmDisableOpen, setConfirmDisableOpen] = useState<boolean>(false);
+  const [isDisabling, setIsDisabling] = useState<boolean>(false);
+
+  // Change vehicle modal state
+  const [changeVehicleOpen, setChangeVehicleOpen] = useState<boolean>(false);
+  const [newPlate, setNewPlate] = useState<string>('');
+  const [changeVehicleError, setChangeVehicleError] = useState<string | null>(null);
+  const [isChangingVehicle, setIsChangingVehicle] = useState<boolean>(false);
+
   const openDocModal = (type: 'license' | 'soat' | 'technical') => {
     setDocType(type);
+    // For SOAT renewals we keep the modal minimal (no insurer input). Prefill nothing here.
     setDocForm({});
     setDocFile(null);
     setDocModalOpen(true);
@@ -273,6 +310,7 @@ const DriverProfile: React.FC = () => {
       if (docFile) {
         const fd = new FormData();
         // append metadata depending on type
+        // append metadata (we intentionally do not force insurer for simple renewals)
         Object.entries(docForm).forEach(([k, v]) => { if (v !== undefined && v !== null) fd.append(k, String(v)); });
         fd.append('file', docFile);
 
@@ -308,6 +346,62 @@ const DriverProfile: React.FC = () => {
     }
   };
 
+  const handleOpenDisable = () => {
+    setConfirmDisableOpen(true);
+  };
+
+  const handleConfirmDisable = async () => {
+    setIsDisabling(true);
+    try {
+      await disableMyAccount();
+      // logout and redirect to login
+      const { logout } = await import('../../../features/auth/authSlice');
+      // dispatch logout synchronously
+      dispatch(logout());
+      // navigate to login (full reload; cannot use hook here)
+      window.location.href = '/login';
+    } catch (err: any) {
+      console.error('Failed to disable account', err);
+      alert(err?.response?.data?.error ?? err?.message ?? 'Error al deshabilitar cuenta');
+    } finally {
+      setIsDisabling(false);
+      setConfirmDisableOpen(false);
+    }
+  };
+
+  // Change vehicle handlers
+  const openChangeVehicle = () => {
+    setNewPlate('');
+    setChangeVehicleError(null);
+    setChangeVehicleOpen(true);
+  };
+
+  const submitChangeVehicle = async () => {
+    if (!newPlate || String(newPlate).trim() === '') {
+      setChangeVehicleError('Ingrese la nueva placa');
+      return;
+    }
+    setIsChangingVehicle(true);
+    setChangeVehicleError(null);
+    try {
+      // call update profile endpoint to request plate change (backend enforces SOAT+TR existence)
+      const body = { motorcycle: { plate: newPlate.trim().toUpperCase() } };
+      await (dispatch(updateDriverProfile(body) as any)).unwrap();
+      // if backend accepted, refresh profile and close modal
+      await dispatch(getDriverProfile() as any);
+      setChangeVehicleOpen(false);
+      setNewPlate('');
+      setChangeVehicleError(null);
+      alert('Vehículo actualizado correctamente');
+    } catch (err: any) {
+      console.error('change vehicle error', err);
+      const msg = err?.payload?.message ?? err?.response?.data?.message ?? err?.message ?? 'Error al cambiar vehículo';
+      setChangeVehicleError(String(msg));
+    } finally {
+      setIsChangingVehicle(false);
+    }
+  };
+
   const handleInputChange = (field: string, value: string) => {
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
@@ -334,7 +428,7 @@ const DriverProfile: React.FC = () => {
   const validateAll = () => {
     // Only validate editable fields (leave documentary and unrelated fields visible but not required)
     const required = [
-      'firstName', 'lastName', 'phone', 'email', 'vehicleInfo.color'
+      'phone', 'email'
     ];
 
     const newErrors: Record<string,string> = {};
@@ -356,8 +450,11 @@ const DriverProfile: React.FC = () => {
 
   const handleSave = async () => {
     setIsSaving(true);
+    // show loading notification
+    setNotification({ visible: true, status: 'loading', message: 'Enviando solicitud de cambios...' });
     const ok = validateAll();
     if (!ok) {
+      setNotification({ visible: false, status: 'idle', message: '' });
       // scroll to top of form (optional)
       const el = document.querySelector('.p-6');
       el?.scrollIntoView({ behavior: 'smooth' });
@@ -366,15 +463,24 @@ const DriverProfile: React.FC = () => {
     }
 
     try {
-      const body: any = {
-        user: {
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-          email: profileData.email,
-          phone: profileData.phone
-        },
-        motorcycle: { color: profileData.vehicleInfo.color }
-      };
+      const body: any = { user: { email: profileData.email, phone: profileData.phone } };
+
+      // only include license dates if they changed
+      try {
+        const orig = originalProfileRef.current;
+        const issueChanged = !orig || (String(profileData.licenseIssueDate ?? '') !== String(orig.licenseIssueDate ?? orig.raw?.driver?.license_info?.issue_date ?? ''));
+        const expChanged = !orig || (String(profileData.licenseExpiryDate ?? '') !== String(orig.licenseExpiryDate ?? orig.raw?.driver?.license_info?.expiration_date ?? ''));
+        if (issueChanged || expChanged) {
+          body.driver = {} as any;
+          if (issueChanged) body.driver.license_issue_date = profileData.licenseIssueDate ?? null;
+          if (expChanged) body.driver.license_expiration_date = profileData.licenseExpiryDate ?? null;
+        }
+      } catch (e) {
+        body.driver = { license_issue_date: profileData.licenseIssueDate ?? null, license_expiration_date: profileData.licenseExpiryDate ?? null };
+      }
+
+      // DEBUG: inspect payload sent to backend
+      console.log('[DriverProfile] update payload:', body);
 
       // use the redux thunk so the slice handles the API call and mapping
       const result = await (dispatch(updateDriverProfile(body) as any)).unwrap();
@@ -384,25 +490,55 @@ const DriverProfile: React.FC = () => {
       // handle actions returned by API (if any)
       const actions = data.actions ?? {};
       if (actions.user) {
-        if (actions.user.email === 'updated') alert('Correo actualizado correctamente');
-        if (actions.user.phone === 'updated') alert('Teléfono actualizado correctamente');
+        // show small success hints for changed fields
+        if (actions.user.email === 'updated') {
+          // update notification message
+          setNotification({ visible: true, status: 'success', message: 'Correo actualizado correctamente' });
+        }
+        if (actions.user.phone === 'updated') {
+          setNotification({ visible: true, status: 'success', message: 'Teléfono actualizado correctamente' });
+        }
       }
 
-      // handle pending documents
+      // handle pending documents: show a success state indicating request queued
       if (actions.pendingDocuments || data.pendingDocuments) {
         const pd = actions.pendingDocuments ?? data.pendingDocuments;
         setPendingDocuments(pd);
-        alert('Tu solicitud quedó en estado Pendiente. Te avisaremos cuando sea aprobada.');
+        setNotification({ visible: true, status: 'success', message: 'Solicitud enviada. Pendiente de revisión.' });
+      } else if (!actions.user) {
+        // generic success when no pending docs and no specific user actions
+        setNotification({ visible: true, status: 'success', message: 'Cambios guardados correctamente' });
       }
 
       // ensure store is in sync (thunk already updated profile but refresh to be safe)
       await dispatch(getDriverProfile() as any);
       setErrors({});
-    } catch (err) {
+
+      // auto-hide success notification after a delay
+      setTimeout(() => setNotification({ visible: false, status: 'idle', message: '' }), 3500);
+    } catch (err: any) {
       console.error(err);
-      alert('Error al guardar');
+      const msg = err?.payload?.message ?? err?.response?.data?.message ?? err?.message ?? (typeof err === 'string' ? err : null) ?? 'Error al guardar';
+      // show error notification with message
+      setNotification({ visible: true, status: 'error', message: String(msg) });
+      // auto-hide error after a bit
+      setTimeout(() => setNotification({ visible: false, status: 'idle', message: '' }), 6000);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      // reload profile from server/store to discard local edits
+      await dispatch(getDriverProfile() as any);
+      setErrors({});
+      setDocModalOpen(false);
+      setDocForm({});
+      setDocFile(null);
+      alert('Cambios descartados');
+    } catch (e) {
+      console.warn('Failed to reload profile', e);
     }
   };
 
@@ -410,7 +546,7 @@ const DriverProfile: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Navbar */}
-        <DriverNavbar profileImage={profileData.profileImage} name={profileData.firstName} />
+        <TopBar profileImage={profileData.profileImage} name={profileData.firstName} />
         <div className="max-w-6xl mx-auto p-8">
           <div className="bg-white rounded-lg shadow-sm p-6 text-center">
             <p className="text-lg font-medium">Cargando perfil...</p>
@@ -424,9 +560,40 @@ const DriverProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
-      <DriverNavbar profileImage={profileData.profileImage} name={profileData.firstName} />
+      <TopBar profileImage={profileData.profileImage} name={profileData.firstName} />
+
+      {/* Notification toast */}
+      {notification.visible && (
+        <div className="fixed right-4 top-20 z-50">
+          <div className={`flex items-center space-x-3 max-w-sm w-full p-3 rounded shadow-lg border ${notification.status === 'loading' ? 'bg-white border-gray-200' : notification.status === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className="w-10 h-10 flex items-center justify-center">
+              {notification.status === 'loading' && <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />}
+              {notification.status === 'success' && <Check className="w-6 h-6 text-green-600" />}
+              {notification.status === 'error' && <X className="w-6 h-6 text-red-600" />}
+            </div>
+            <div className="flex-1">
+              <div className={`text-sm ${notification.status === 'success' ? 'text-green-800' : notification.status === 'error' ? 'text-red-800' : 'text-gray-800'}`}>{notification.message}</div>
+              {notification.status === 'loading' && <div className="text-xs text-gray-500 mt-1">Cargando…</div>}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto p-4">
+        {alerts && alerts.length > 0 && (
+          <div className="mb-4">
+            <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+              <div className="flex items-start">
+                <div className="ml-2">
+                  {alerts.map((a, i) => (
+                    <p key={i} className="text-sm text-red-800 font-medium">{a}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {pendingDocuments && pendingDocuments.length > 0 && (
           <div className="mb-4">
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
@@ -462,8 +629,6 @@ const DriverProfile: React.FC = () => {
                     <input type="date" className="w-full p-2 border rounded" value={docForm.issue_date ?? ''} onChange={(e) => handleDocInput('issue_date', e.target.value)} />
                     <label className="block text-sm">Fecha de vencimiento</label>
                     <input type="date" className="w-full p-2 border rounded" value={docForm.expiration_date ?? ''} onChange={(e) => handleDocInput('expiration_date', e.target.value)} />
-                    <label className="block text-sm">Tipo de licencia</label>
-                    <input className="w-full p-2 border rounded" value={docForm.license_type ?? ''} onChange={(e) => handleDocInput('license_type', e.target.value)} />
                   </>
                 )}
 
@@ -492,14 +657,55 @@ const DriverProfile: React.FC = () => {
                   </>
                 )}
 
-                <div>
-                  <label className="block text-sm">Archivo (opcional)</label>
-                  <input type="file" accept="image/*,application/pdf" onChange={handleDocFile} />
-                </div>
+                {docType !== 'license' && (
+                  <div>
+                    <label className="block text-sm">Archivo (opcional)</label>
+                    <input type="file" accept="image/*,application/pdf" onChange={handleDocFile} />
+                  </div>
+                )}
               </div>
               <div className="p-4 border-t flex justify-end space-x-2">
                 <button onClick={() => setDocModalOpen(false)} className="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
                 <button onClick={submitDocument} className="px-4 py-2 bg-blue-600 text-white rounded">Enviar</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Change Vehicle Modal */}
+        {changeVehicleOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h4 className="font-medium">Asignar nuevo vehículo</h4>
+                <button onClick={() => setChangeVehicleOpen(false)} className="text-gray-500">Cerrar</button>
+              </div>
+              <div className="p-4 space-y-3">
+                <label className="block text-sm">Nueva placa</label>
+                <input className="w-full p-2 border rounded" value={newPlate} onChange={(e) => setNewPlate(e.target.value)} placeholder="ABC123" />
+                {changeVehicleError && <p className="text-xs text-red-600">{changeVehicleError}</p>}
+                <p className="text-sm text-gray-500">Se verificará que exista SOAT y revisión técnica para la placa antes de asignarla.</p>
+              </div>
+              <div className="p-4 border-t flex justify-end space-x-2">
+                <button onClick={() => setChangeVehicleOpen(false)} className="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onClick={submitChangeVehicle} disabled={isChangingVehicle} className="px-4 py-2 bg-blue-600 text-white rounded">{isChangingVehicle ? 'Verificando...' : 'Asignar vehículo'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Disable account confirmation modal */}
+        {confirmDisableOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h4 className="font-medium">¿Estás seguro de deshabilitar tu cuenta?</h4>
+                <button onClick={() => setConfirmDisableOpen(false)} className="text-gray-500">Cerrar</button>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-sm text-gray-700">Al confirmar, tu cuenta será deshabilitada (no se eliminará). Podrás reactivar la cuenta registrándote nuevamente con el mismo correo o número.</p>
+              </div>
+              <div className="p-4 border-t flex justify-end space-x-2">
+                <button onClick={() => setConfirmDisableOpen(false)} className="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onClick={handleConfirmDisable} disabled={isDisabling} className="px-4 py-2 bg-red-600 text-white rounded">{isDisabling ? 'Deshabilitando...' : 'Confirmar deshabilitación'}</button>
               </div>
             </div>
           </div>
@@ -514,7 +720,7 @@ const DriverProfile: React.FC = () => {
                   <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gray-200 mx-auto overflow-hidden">
                     {profileData.profileImage ? (
                       <img 
-                        src={profileData.profileImage} 
+                        src={resolveImageUrl(profileData.profileImage)} 
                         alt="Profile" 
                         className="w-full h-full object-cover"
                       />
@@ -528,7 +734,7 @@ const DriverProfile: React.FC = () => {
                     Cambiar foto de perfil
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,image/avif,.avif"
                       onChange={handleImageUpload}
                       className="hidden"
                     />
@@ -539,34 +745,30 @@ const DriverProfile: React.FC = () => {
 
             {/* Stats Cards */}
             <div className="space-y-4">
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <div className="bg-white rounded-lg shadow-sm p-4 text-center">
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
                     <MapPin className="text-blue-600" size={20} />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-gray-800">{profileData.totalTrips}</div>
-                    <div className="text-sm text-gray-500">Viajes Completados</div>
-                  </div>
+                  <div className="text-3xl font-extrabold text-gray-800">{profileData.totalTrips ?? 0}</div>
+                  <div className="text-sm text-gray-500">Viajes Completados</div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+              <div className="bg-white rounded-lg shadow-sm p-4 text-center">
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-3">
                     <Star className="text-yellow-600" size={20} />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-gray-800">{profileData.rating}</div>
-                    <div className="text-sm text-gray-500">Calificación</div>
-                  </div>
+                  <div className="text-3xl font-extrabold text-gray-800">{profileData.rating ?? 0}</div>
+                  <div className="text-sm text-gray-500">Calificación</div>
                 </div>
               </div>
             </div>
 
             {/* Delete Account */}
             <div className="bg-white rounded-lg shadow-sm p-4">
-              <button className="w-full text-left text-red-600 hover:text-red-700 font-medium">
+              <button onClick={handleOpenDisable} className="w-full text-left text-red-600 hover:text-red-700 font-medium">
                 ELIMINAR CUENTA
               </button>
             </div>
@@ -590,11 +792,10 @@ const DriverProfile: React.FC = () => {
                     <input
                       type="text"
                       value={profileData.firstName}
-                      onChange={(e) => handleInputChange('firstName', e.target.value)}
-                      className={`w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors ${errors['firstName'] ? 'border border-red-400' : ''}`}
+                      readOnly
+                      className={`w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed`}
                       placeholder="Nombre"
                     />
-                    {errors['firstName'] && <p className="text-xs text-red-600 mt-1">{errors['firstName']}</p>}
                   </div>
 
                   <div>
@@ -602,11 +803,10 @@ const DriverProfile: React.FC = () => {
                     <input
                       type="text"
                       value={profileData.lastName}
-                      onChange={(e) => handleInputChange('lastName', e.target.value)}
-                      className={`w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors ${errors['lastName'] ? 'border border-red-400' : ''}`}
+                      readOnly
+                      className={`w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed`}
                       placeholder="Apellidos"
                     />
-                    {errors['lastName'] && <p className="text-xs text-red-600 mt-1">{errors['lastName']}</p>}
                   </div>
 
                   <div>
@@ -658,30 +858,33 @@ const DriverProfile: React.FC = () => {
 
                 {/* Mototaxi Información */}
                 <div className="border-t pt-6">
-                  <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
-                    <img src={iconMoto} alt="Mototaxi" className="mr-2 w-5 h-5 sm:w-6 sm:h-6 object-contain" />
-                    Mototaxi
+                  <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center md:justify-between">
+                    <div className="flex items-center">
+                      <img src={iconMoto} alt="Mototaxi" className="mr-2 w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+                      <span>Mototaxi</span>
+                    </div>
+                    <div className="mt-3 md:mt-0">
+                      <button type="button" onClick={openChangeVehicle} className="px-3 py-1 bg-blue-600 text-white rounded text-sm flex items-center">
+                        <Truck className="w-4 h-4 mr-2" />
+                        Cambiar vehículo
+                      </button>
+                    </div>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
-                      <input
-                        type="text"
-                        value={profileData.vehicleInfo.type}
-                        readOnly
-                        className="w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed"
-                      />
-                    </div>
+                    {/* vehicle type removed per UX request */}
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Placa</label>
-                      <input
-                        type="text"
-                        value={profileData.vehicleInfo.plate}
-                        readOnly
-                        placeholder="4417-SA"
-                        className="w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed"
-                      />
+                      <div>
+                        <input
+                          type="text"
+                          value={profileData.vehicleInfo.plate}
+                          readOnly
+                          placeholder="4417-SA"
+                          className={`w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed ${errors['vehicleInfo.plate'] ? 'border-red-400' : ''}`}
+                        />
+                      </div>
+                      {errors['vehicleInfo.plate'] && <p className="text-xs text-red-600 mt-1">{errors['vehicleInfo.plate']}</p>}
                     </div>
 
                     <div>
@@ -689,8 +892,8 @@ const DriverProfile: React.FC = () => {
                       <input
                         type="text"
                         value={profileData.vehicleInfo.color}
-                        onChange={(e) => handleInputChange('vehicleInfo.color', e.target.value)}
-                        className={`w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors ${errors['vehicleInfo.color'] ? 'border border-red-400' : ''}`}
+                        readOnly
+                        className={`w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed`}
                         placeholder="Color del vehículo"
                       />
                       {errors['vehicleInfo.color'] && <p className="text-xs text-red-600 mt-1">{errors['vehicleInfo.color']}</p>}
@@ -722,26 +925,7 @@ const DriverProfile: React.FC = () => {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Compañía Aseguradora
-                      </label>
-                      <select
-                        value={profileData.soatInsurer}
-                        onChange={(e) => handleInputChange('soatInsurer', e.target.value)}
-                        className={`w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors ${errors['soatInsurer'] ? 'border border-red-400' : ''}`}
-                      >
-                        <option value="RIMAC Seguros">RIMAC Seguros</option>
-                        <option value="Pacífico Seguros">Pacífico Seguros</option>
-                        <option value="La Positiva Seguros">La Positiva Seguros</option>
-                        <option value="Mapfre Perú">Mapfre Perú</option>
-                        <option value="Interseguro">Interseguro</option>
-                        <option value="Chubb Seguros">Chubb Seguros Perú</option>
-                        <option value="HDI Seguros">HDI Seguros</option>
-                        <option value="Crecer Seguros">Crecer Seguros</option>
-                      </select>
-                      {errors['soatInsurer'] && <p className="text-xs text-red-600 mt-1">{errors['soatInsurer']}</p>}
-                    </div>
+                    {/* Compañía aseguradora removida del formulario de renovación simple de SOAT por requerimiento */}
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -750,7 +934,8 @@ const DriverProfile: React.FC = () => {
                       <div className="relative">
                         <input
                           type="date"
-                          value={profileData.soatExpiryDate}
+                          placeholder=""
+                          value={profileData.soatExpiryDate ?? ''}
                           onChange={(e) => handleInputChange('soatExpiryDate', e.target.value)}
                           className={`w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors pr-10 ${errors['soatExpiryDate'] ? 'border border-red-400' : ''}`}
                         />
@@ -760,19 +945,7 @@ const DriverProfile: React.FC = () => {
                       {errors['soatExpiryDate'] && <p className="text-xs text-red-600 mt-1">{errors['soatExpiryDate']}</p>}
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Número de Certificado
-                      </label>
-                      <input
-                        type="text"
-                        value={profileData.soatCertificate}
-                        readOnly
-                        className="w-full px-3 py-2 bg-gray-200 border-none rounded-md text-gray-600 cursor-not-allowed"
-                        placeholder="CERT-RIMAC-2024-789123"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Certificado emitido por la aseguradora</p>
-                    </div>
+                    {/* Certificate number removed per UX request */}
                   </div>
                 </div>
 
@@ -829,7 +1002,8 @@ const DriverProfile: React.FC = () => {
                       <div className="relative">
                         <input
                           type="date"
-                          value={profileData.licenseIssueDate}
+                          placeholder=""
+                          value={profileData.licenseIssueDate ?? ''}
                           onChange={(e) => handleInputChange('licenseIssueDate', e.target.value)}
                           className={`w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors pr-10 ${errors['licenseIssueDate'] ? 'border border-red-400' : ''}`}
                         />
@@ -845,7 +1019,8 @@ const DriverProfile: React.FC = () => {
                       <div className="relative">
                         <input
                           type="date"
-                          value={profileData.licenseExpiryDate}
+                          placeholder=""
+                          value={profileData.licenseExpiryDate ?? ''}
                           onChange={(e) => handleInputChange('licenseExpiryDate', e.target.value)}
                           className={`w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors pr-10 ${errors['licenseExpiryDate'] ? 'border border-red-400' : ''}`}
                         />
@@ -876,7 +1051,7 @@ const DriverProfile: React.FC = () => {
 
                 {/* Acción Buttons */}
                 <div className="border-t pt-6 flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
-                  <button className="w-full sm:w-auto px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors">
+                  <button onClick={handleCancel} className="w-full sm:w-auto px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors">
                     Cancelar
                   </button>
                   <button
