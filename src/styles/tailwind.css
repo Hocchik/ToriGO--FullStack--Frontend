@@ -1,19 +1,35 @@
 @import "tailwindcss";
 
-/* Estilos para el logo */
+:root{
+  /* Primary brand color: guinda (deep maroon) */
+  --tg-primary: #8B0000; /* guinda (darker) */
+  --tg-primary-mid: #b53b2b; /* warmer mid tone */
+  --tg-accent: #ff8a6b; /* accent/CTA */
+  --tg-guinda: #8B0000;
+  --tg-bg: #ffffff;
+  --tg-muted: #6b7280;
+}
+
+/* Logo helper */
 .logo {
   position: absolute;
   top: 1rem;
   left: 1rem;
 }
 
-/* Centrar el logo en pantallas pequeñas */
+/* Ajustes para pantallas pequeñas */
 @media (max-width: 768px) {
   .logo {
     position: static;
     display: block;
     margin: 0 auto;
-    width: 75px; /* Ajusta el tamaño según sea necesario */
-    height: 75px; /* Ajusta el tamaño según sea necesario */
+    width: 64px;
+    height: 64px;
   }
+  html { font-size: 14px; }
 }
+
+@media (min-width:769px) {
+  html { font-size: 16px; }
+}
+

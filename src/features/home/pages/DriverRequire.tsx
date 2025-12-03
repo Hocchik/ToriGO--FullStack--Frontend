@@ -5,48 +5,48 @@ export const driverRequireStyles = {
   driverRequireContainer: "bg-center bg-white",
 
   // Nueva sección hero
-  heroSection: "bg-white py-20 px-8",
+  heroSection: "bg-white py-16 px-6 md:px-12",
   heroContainer: "max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center",
   heroContent: "space-y-6",
-  heroTitle: "text-5xl font-bold text-gray-900 leading-tight mb-6",
-  heroDescription: "text-gray-600 text-lg leading-relaxed mb-8",
-  heroImageContainer: "bg-gray-200 rounded-lg h-96",
-  heroImage: "w-full h-full object-cover rounded-lg",
+  heroTitle: "text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-4",
+  heroDescription: "text-gray-600 text-lg md:text-xl leading-relaxed mb-8",
+  heroImageContainer: "bg-gray-100 rounded-lg h-80 md:h-96 overflow-hidden",
+  heroImage: "w-full h-full object-cover rounded-lg shadow-lg",
 
-  valueCardImage: "flex items-center space-x-2",
-  valueCardImagepng: "w-20 h-20 mx-auto mb-4",
+  valueCardImage: "flex items-center justify-center",
+  valueCardImagepng: "w-16 h-16 mx-auto mb-4",
   valuesSection: "bg-gray-50 rounded-2xl p-8 mb-16",
-  valuesTitle: "text-5xl font-semibold mb-8 text-center",
-  valuesGrid: "grid md:grid-cols-3 gap-8 w-290 mx-auto",
-  valueCard: "border border-none rounded-xl  bg-white text-center w-90 mx-auto p-10",
-  valueCardTitle: "font-semibold text-xl mb-2",
-  valueCardText: "font-bold text-gray-600",
+  valuesTitle: "text-3xl md:text-4xl font-semibold mb-8 text-center",
+  valuesGrid: "grid md:grid-cols-3 gap-8 max-w-5xl mx-auto",
+  valueCard: "rounded-xl bg-white text-center p-6 md:p-8 shadow-lg hover:shadow-2xl transition",
+  valueCardTitle: "font-semibold text-lg md:text-xl mb-2",
+  valueCardText: "text-gray-600 font-medium",
 
-  registerSection: "py-16 px-8",
-  registerTitle: "text-center text-5xl font-semibold mb-12",
+  registerSection: "py-16 px-6 md:px-12",
+  registerTitle: "text-center text-3xl md:text-4xl font-semibold mb-10",
   registerGrid: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto",
-  registerCard: "border border-none rounded-xl bg-white text-center max-w-xs mx-auto p-8 flex flex-col items-center",
-  registerCardTitle: "w-12 h-12 rounded-full bg-black text-red-400 flex items-center justify-center mb-4 text-xl font-bold",
-  registerCardText: "font-bold text-gray-600 text-center",
+  registerCard: "rounded-xl bg-white text-center max-w-xs mx-auto p-6 flex flex-col items-center shadow",
+  registerCardTitle: "w-12 h-12 rounded-full bg-[#77160e] text-white flex items-center justify-center mb-4 text-lg font-bold",
+  registerCardText: "font-medium text-gray-600 text-center",
 
-  preguntasSection: "bg-gray-50 py-16 px-8 mb-16",
-  preguntasTitle: "text-4xl font-bold text-gray-900 text-center mb-12",
+  preguntasSection: "bg-gray-50 py-16 px-6 md:px-12 mb-16",
+  preguntasTitle: "text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12",
   preguntasContainer: "max-w-4xl mx-auto",
   preguntasGrid: "flex flex-col md:flex-row gap-6",
   preguntasColumn: "flex-1 space-y-6",
-  preguntasItem: "bg-white rounded-lg border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md",
-  preguntasButton: "w-full p-6 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-red-400",
-  preguntasQuestion: "text-lg font-semibold text-gray-800 pr-4",
+  preguntasItem: "bg-white rounded-lg border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg",
+  preguntasButton: "w-full p-5 md:p-6 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#ff7a66]",
+  preguntasQuestion: "text-base md:text-lg font-semibold text-gray-800 pr-4",
   preguntasIcon: "text-2xl text-gray-600 transition-transform duration-200",
   preguntasAnswer: "px-6 pb-6 text-gray-600 leading-relaxed",
   preguntasAnswerExpanded: "px-6 pb-6 text-gray-600 leading-relaxed border-t border-gray-100 pt-4",
 
   // Sección CTA final
-  ctaSection: "bg-[#77160e] py-16 px-8",
+  ctaSection: "bg-[#77160e] py-16 px-6",
   ctaContainer: "max-w-4xl mx-auto text-center",
-  ctaTitle: "text-4xl font-bold text-white mb-6",
-  ctaDescription: "text-xl text-white/90 mb-8 leading-relaxed",
-  ctaButton: "inline-block bg-white text-[#77160e] px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition-all duration-200 transform hover:scale-105 shadow-lg"
+  ctaTitle: "text-3xl md:text-4xl font-bold text-white mb-6",
+  ctaDescription: "text-lg md:text-xl text-white/90 mb-8 leading-relaxed",
+  ctaButton: "inline-block bg-white text-[#77160e] px-8 py-3 rounded-full font-bold text-base hover:bg-gray-100 transition-all duration-200 transform hover:scale-105 shadow-lg"
 }
 
 const faqData = [
@@ -101,7 +101,7 @@ export const DriverRequire = () => {
       navigate('/driver-register');
     };
   return (
-    <div className={driverRequireStyles.driverRequireContainer} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+    <div className={driverRequireStyles.driverRequireContainer} style={{ fontFamily: 'Poppins, Montserrat, sans-serif' }}>
       
       {/* Nueva sección hero */}
       <section className={driverRequireStyles.heroSection}>

@@ -4,21 +4,20 @@ export const aboutPageStyles = {
   container: "bg-center bg-white",
   
   headerSection: "text-center mb-16 ",
-
-  missionSection: "bg-[url('/src/assets/Acercade.png')] bg-center bg-cover grid md:grid-cols-2 gap-12 items-center mb-16 min-h-[90vh] px-8 py-16 -mt-16 pt-20",
+  missionSection: "bg-[url('/src/assets/Acercade.png')] bg-center bg-cover grid md:grid-cols-2 gap-12 items-center mb-16 min-h-[70vh] px-6 md:px-12 py-16 -mt-16 pt-20",
   
   missionContent: "",
-  missionTitle: "font-semibold text-white text-8xl mb-6",
-  missionText: "font-semibold text-gray-100 text-2xl  mb-4 ",
+  missionTitle: "font-extrabold text-white text-5xl md:text-6xl lg:text-7xl mb-6 drop-shadow-2xl",
+  missionText: "font-medium text-white/90 text-lg md:text-2xl mb-4",
   
   valueCardImage: "flex items-center space-x-2",
   valueCardImagepng: "w-20 h-20 mx-auto mb-4",
   valuesSection: "bg-gray-50 rounded-2xl p-8 mb-16",
-  valuesTitle: "text-5xl font-semibold mb-8 text-center",
-  valuesGrid: "grid md:grid-cols-3 gap-8 w-290 mx-auto",
-  valueCard: "border border-none rounded-xl  bg-white text-center w-90 mx-auto p-10",
-  valueCardTitle: "font-semibold text-xl mb-2",
-  valueCardText: "font-bold text-gray-600",
+  valuesTitle: "text-4xl md:text-5xl font-semibold mb-8 text-center",
+  valuesGrid: "grid md:grid-cols-3 gap-8 max-w-5xl mx-auto",
+  valueCard: "rounded-xl bg-white text-center p-8 shadow-lg hover:shadow-2xl transition",
+  valueCardTitle: "font-semibold text-lg md:text-xl mb-2",
+  valueCardText: "text-gray-600 font-medium",
 
   aboutusSection: "bg-white py-16 px-8 mb-4",
   aboutusContainer: "max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center",
@@ -33,20 +32,20 @@ export const aboutPageStyles = {
   aboutusButton: "inline-block bg-red-400 text-white px-6 py-3 rounded-full font-semibold hover:bg-red-600 transition-colors",
 
   // Preguntas frecuentes - Nuevo estilo
-  preguntasSection: "bg-gray-50 py-16 px-8 mb-16",
-  preguntasTitle: "text-4xl font-bold text-gray-900 text-center mb-12",
+  preguntasSection: "bg-gray-50 py-16 px-4 md:px-8 mb-16",
+  preguntasTitle: "text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12",
   preguntasContainer: "max-w-4xl mx-auto",
   preguntasGrid: "flex flex-col md:flex-row gap-6",
   preguntasColumn: "flex-1 space-y-6",
-  preguntasItem: "bg-white rounded-lg border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md",
-  preguntasButton: "w-full p-6 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-red-400",
-  preguntasQuestion: "text-lg font-semibold text-gray-800 pr-4",
+  preguntasItem: "bg-white rounded-lg border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg",
+  preguntasButton: "w-full p-5 md:p-6 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#ff7a66]",
+  preguntasQuestion: "text-base md:text-lg font-semibold text-gray-800 pr-4",
   preguntasIcon: "text-2xl text-gray-600 transition-transform duration-200",
   preguntasAnswer: "px-6 pb-6 text-gray-600 leading-relaxed",
   preguntasAnswerExpanded: "px-6 pb-6 text-gray-600 leading-relaxed border-t border-gray-100 pt-4",
 
   messageSection: "bg-white py-16 px-8",
-  messageTitle: "text-4xl font-bold text-gray-900 text-center",
+  messageTitle: "text-3xl md:text-4xl font-bold text-gray-900 text-center",
 };
 
 const faqData = [
@@ -96,7 +95,7 @@ export const AboutPage = () => {
   const leftColumnFAQs = faqData.filter((_, index) => index % 2 === 0);
   const rightColumnFAQs = faqData.filter((_, index) => index % 2 === 1);
   return (
-    <div className={aboutPageStyles.container} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+    <div className={aboutPageStyles.container} style={{ fontFamily: 'Poppins, Montserrat, sans-serif' }}>
       <div className={aboutPageStyles.headerSection}>
 
       </div>

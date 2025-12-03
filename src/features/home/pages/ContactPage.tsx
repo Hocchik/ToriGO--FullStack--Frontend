@@ -3,9 +3,9 @@ export const contactPageStyles = {
   container: "bg-center bg-white min-h-screen pt-16",
   
   // Header section
-  headerSection: "bg-[url('/src/assets/cliente.jpg')] bg-center bg-cover grid md:grid-cols-2 gap-12 items-center mb-16 min-h-[90vh] px-8 py-16 pt-20",
-  headerTitle: "font-semibold text-black text-8xl mb-6",
-  headerSubtitle: "font-semibold text-black text-2xl  mb-4 ",
+  headerSection: "relative bg-[url('/src/assets/cliente.jpg')] bg-center bg-cover grid md:grid-cols-2 gap-12 items-center mb-16 min-h-[70vh] px-6 md:px-12 py-16 pt-20",
+  headerTitle: "font-extrabold text-white text-5xl md:text-6xl lg:text-7xl mb-4 drop-shadow-lg",
+  headerSubtitle: "font-medium text-white/90 text-xl md:text-2xl mb-4",
   
   // Grid principal
   mainGrid: "",
@@ -40,16 +40,19 @@ export const contactPageStyles = {
   label: "block text-sm font-semibold text-gray-700 mb-2",
   input: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500",
   textarea: "w-full px-4 py-3 border border-gray-300 rounded-lg h-32 resize-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500",
-  button: "w-full bg-red-400 text-white py-4 px-6 rounded-lg font-semibold text-lg hover:bg-red-500 focus:ring-4 focus:ring-red-200 transition-all duration-200 transform hover:scale-105"
+  button: "w-full bg-gradient-to-r from-[#b53b2b] to-[#ff7a66] text-white py-4 px-6 rounded-lg font-semibold text-lg hover:opacity-95 focus:ring-4 focus:ring-[#ff7a66]/30 transition-all duration-200 transform hover:scale-105 shadow-md"
 };
 
 
 export const ContactPage = () => {
   return (
-    <div className={contactPageStyles.container} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+    <div className={contactPageStyles.container} style={{ fontFamily: 'Poppins, Montserrat, sans-serif' }}>
       <div className={contactPageStyles.headerSection}>
-        <h1 className={contactPageStyles.headerTitle}>Contáctanos</h1>
-        <p className={contactPageStyles.headerSubtitle}>Estamos aquí para ayudarte</p>
+        <div className="absolute inset-0 bg-black/35"></div>
+        <div className="relative z-10 px-4 md:px-0">
+          <h1 className={contactPageStyles.headerTitle}>Contáctanos</h1>
+          <p className={contactPageStyles.headerSubtitle}>Estamos aquí para ayudarte</p>
+        </div>
       </div>
 
       <div className={contactPageStyles.mainGrid}>

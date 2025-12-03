@@ -4,39 +4,37 @@ import { useState } from 'react';
  const homePageStyles = {
   container: "",
   
-  heroSection: "relative h-screen bg-gradient-to-r from-black to-red-500 ",
+  heroSection: "relative h-screen bg-gradient-to-r from-[#77160e] via-[#b53b2b] to-[#ff7a66]",
   heroContainer: "max-w-7xl mx-auto px-4 h-full flex items-center justify-between",
   
   heroContent: "text-white space-y-6 max-w-xl",
-  heroTitle: "text-6xl font-bold",
-  heroSubtitle: "text-2xl",
+  heroTitle: "text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight leading-tight text-white",
+  heroSubtitle: "text-2xl text-white/90",
   heroButtonsContainer: "space-y-4",
-  heroPrimaryButton: "bg-white text-orange-500 px-8 py-3 rounded-full font-semibold hover:bg-orange-50 inline-block w-full text-center",
-  heroDriverText: "text-sm text-white/80",
+  heroPrimaryButton: "bg-white text-[#77160e] px-8 py-3 rounded-full font-semibold hover:bg-white/90 inline-block w-full text-center shadow-lg",
+  heroDriverText: "text-sm text-white/90",
   heroDriverLink: "underline",
   
- 
-  appPreview: "hidden lg:block w-1/2 max-w-lg",
-  appPreviewCard: "bg-white rounded-3xl p-8 shadow-2xl",
-  appPreviewTitle: "text-gray-900 text-2xl font-bold mb-6",
-  appPreviewSubtitle: "text-gray-600 text-sm mb-8",
+  appPreview: "hidden md:block w-1/2 max-w-lg",
+  appPreviewCard: "bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-white/10",
+  appPreviewTitle: "text-gray-900 text-2xl font-bold mb-4",
+  appPreviewSubtitle: "text-gray-600 text-sm mb-6",
   
 
-  tripForm: "space-y-4 mb-8",
+  tripForm: "space-y-4 mb-6",
   inputGroup: "relative",
   inputIcon: "absolute left-4 top-1/2 transform -translate-y-1/2 z-10",
   locationIcon: "w-3 h-3 bg-gray-400 rounded-full",
   destinationIcon: "w-3 h-3 bg-gray-800 rounded-sm",
-  input: "w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all duration-200",
-  inputFocused: "ring-2 ring-orange-400 border-transparent",
+  input: "w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-[#ff7a66] focus:border-transparent transition-all duration-200",
+  inputFocused: "ring-4 ring-[#ff7a66] border-transparent",
   
-
   connector: "flex justify-center my-2",
   connectorLine: "w-px h-4 bg-gray-300",
   
 
   buttonGroup: "",
-  primaryButton: "w-full bg-gray-900 text-white py-4 px-6 rounded-xl font-semibold hover:bg-gray-800 transition-colors duration-200",
+  primaryButton: "w-full bg-[#77160e] text-white py-4 px-6 rounded-xl font-semibold hover:opacity-95 transition-colors duration-200 shadow-lg",
   
   featuresSection: "py-20 bg-white",
   featuresContainer: "max-w-7xl mx-auto px-4",
@@ -48,7 +46,7 @@ import { useState } from 'react';
 
   motoImageContainer: "max-w-lg mx-auto",
   motoImage: "w-full h-auto rounded-3xl shadow-lg",
-
+ 
  
   groupRideContent: "space-y-6",
   groupRideTitle: "text-4xl font-bold text-gray-900 mb-4",
@@ -59,7 +57,7 @@ export const HomePage = () => {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   return (
-    <div className={homePageStyles.container} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+    <div className={homePageStyles.container} style={{ fontFamily: 'Poppins, Montserrat, sans-serif' }}>
       {/* Hero Section with Service Request */}
       <section className={homePageStyles.heroSection}>
         <div className={homePageStyles.heroContainer}>
