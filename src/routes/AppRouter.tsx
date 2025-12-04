@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
 import { RecoverPassword } from '../features/auth/pages/RecoverPassword';
-import { VerificationCodePage } from '../features/auth/pages/VerificationCodePage';
+import VerificationCodePage from '../features/auth/pages/VerificationCodePage';
 import { VerificationSucces } from '../features/auth/pages/VerificationSucces';
 import { NewPasswordPage } from '../features/auth/pages/NewPasswordPage';
 

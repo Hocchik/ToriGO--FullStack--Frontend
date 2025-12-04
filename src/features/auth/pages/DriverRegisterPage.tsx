@@ -39,8 +39,8 @@ export const DriverRegisterPage = () => {
         </div>
 
         {/* Form Section - Right Side */}
-        <div className="w-full lg:w-1/2 xl:w-2/5 flex items-center justify-center p-3 lg:p-6 bg-gray-50">
-          <div className="w-full max-w-md">
+        <div className="w-full lg:w-1/2 xl:w-2/5 flex flex-col items-center justify-start lg:justify-center p-3 lg:p-6 bg-gray-50 overflow-y-auto">
+          <div className="w-full max-w-md pt-4 lg:pt-0">
             {/* Mobile Logo */}
             <div className="lg:hidden text-center mb-4">
               <img
@@ -52,6 +52,8 @@ export const DriverRegisterPage = () => {
 
             <DriverRegisterForm />
           </div>
+          {/* Padding al final para poder scrollear completamente */}
+          <div className="h-8 lg:hidden"></div>
         </div>
       </div>
     </div>

@@ -26,7 +26,6 @@ const API_BASE_URL = 'http://localhost:3000/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' }
 });
 
 // attach token automatically
@@ -50,7 +49,9 @@ export const updateMyProfile = async (body: any) => {
 
 export const postLicense = async (payload: LicensePayload | FormData) => {
   if (payload instanceof FormData) {
-    const { data } = await apiClient.post('/drivers/documents/license', payload, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const { data } = await apiClient.post('/drivers/documents/license', payload, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return data;
   }
   const { data } = await apiClient.post('/drivers/documents/license', payload);
@@ -59,7 +60,9 @@ export const postLicense = async (payload: LicensePayload | FormData) => {
 
 export const postSoat = async (payload: SoatPayload | FormData) => {
   if (payload instanceof FormData) {
-    const { data } = await apiClient.post('/drivers/documents/soat', payload, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const { data } = await apiClient.post('/drivers/documents/soat', payload, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return data;
   }
   const { data } = await apiClient.post('/drivers/documents/soat', payload);
@@ -68,20 +71,42 @@ export const postSoat = async (payload: SoatPayload | FormData) => {
 
 export const postTechnicalReview = async (payload: TechnicalReviewPayload | FormData) => {
   if (payload instanceof FormData) {
-    const { data } = await apiClient.post('/drivers/documents/technical-review', payload, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const { data } = await apiClient.post('/drivers/documents/technical-review', payload, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return data;
   }
   const { data } = await apiClient.post('/drivers/documents/technical-review', payload);
   return data;
 };
 
+export const approveRequest = async (type: string, id: string) => {
+  const { data } = await apiClient.post(`/drivers/documents/requests/${encodeURIComponent(type)}/${encodeURIComponent(id)}/approve`);
+  return data;
+};
+
 export const uploadProfilePhoto = async (formData: FormData) => {
-  const { data } = await apiClient.post('/drivers/me/photo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  const { data } = await apiClient.post('/drivers/me/photo', formData);
   return data;
 };
 
 export const disableMyAccount = async () => {
   const { data } = await apiClient.post('/drivers/me/disable');
+  return data;
+};
+
+export const updateLicenseExpiry = async (license_expiry_date: string) => {
+  const { data } = await apiClient.put('/drivers/me/license-expiry', { license_expiry_date });
+  return data;
+};
+
+export const updateSoatExpiry = async (soat_expiry_date: string) => {
+  const { data } = await apiClient.put('/drivers/me/soat-expiry', { soat_expiry_date });
+  return data;
+};
+
+export const updateTechnicalReviewExpiry = async (technical_review_expires_at: string) => {
+  const { data } = await apiClient.put('/drivers/me/technical-review-expiry', { technical_review_expires_at });
   return data;
 };
 
@@ -91,4 +116,5 @@ export default {
   postLicense,
   postSoat,
   postTechnicalReview,
+  approveRequest,
 };

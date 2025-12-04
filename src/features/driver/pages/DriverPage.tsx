@@ -1,38 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { RideRequest } from "./Models";
 import DriverMap from "../../../components/DriverMap";
-import { useDispatch, useSelector } from 'react-redux';
+import type { RideRequest } from './Models';
+import { useDispatch } from 'react-redux';
 import TripService from '../../../services/TripService';
-import { addTrip, acceptTrip, setDriverAvailability } from '../driverSlice';
-import type { RootState } from '../../../store';
+import { addTrip, acceptTrip } from '../driverSlice';
 import RequestList from "../components/RequestList";
 import RideDetails from "../components/RideDetails";
 import LoadingOverlay from "../components/LoadingOverlay";
 import RideNotificationQueue from "../components/RideNotificationQueue";
 import SlidingSidebar from "../components/SlidingSideBar";
 import fondoMototaxi from "../../../assets/DriverPage.png";
+import { useAvailability } from '../hooks/useAvailability';
+import { usePolling } from '../hooks/usePolling';
 
-// Dummy ride requests including coordinates for simulation (lng, lat)
-const dummyRequests: any[] = [
-  {
-    id: "1",
-    pickup: "Calle Principal",
-    drop: "Avenida Parque",
-    price: 12.5,
-    passenger: { id: "p1", name: "Carlos López", rating: 4.8 },
-    pickupCoords: { lng: -77.0425, lat: -12.0460 },
-    dropCoords: { lng: -77.0300, lat: -12.0500 },
-  },
-  {
-    id: "2",
-    pickup: "Aeropuerto",
-    drop: "Centro",
-    price: 20,
-    passenger: { id: "p2", name: "María Torres", rating: 4.9 },
-    pickupCoords: { lng: -77.1167, lat: -12.0219 },
-    dropCoords: { lng: -77.0300, lat: -12.0460 },
-  },
-];
+
+// use shared RideRequest model from `Models.ts`
 
 export const DriverPage = () => {
   const [isOnline, setIsOnline] = useState(false);
@@ -43,17 +25,27 @@ export const DriverPage = () => {
   );
   const movementRef = useRef<number | null>(null);
   const geoWatchRef = useRef<number | null>(null);
+  const traceFlushRef = useRef<number | null>(null);
+  const traceBufferRef = useRef<Array<{ lat: number; lng: number; ts: string }>>([]);
   const pendingLocRef = useRef<{ lat: number; lng: number } | null>(null);
   const pendingTimerRef = useRef<number | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
   const driverLocationRef = useRef<{ lat: number; lng: number } | null>(driverLocation);
   const driverTraceRef = useRef<Array<{ lat: number; lng: number; ts: string }>>([]);
   const dispatch = useDispatch();
-  const availability = useSelector((s: RootState) => s.driver?.availability);
+  
+  // Use custom hooks for availability and polling
+  const { availability, setAvailability } = useAvailability();
+  const { pendingRequests } = usePolling(true);
   const [routePhase, setRoutePhase] = useState<'idle' | 'toPickup' | 'toDrop'>('idle');
-  const [pendingRequests, setPendingRequests] = useState<RideRequest[]>([]);
-  const [expiredRequests, setExpiredRequests] = useState<RideRequest[]>([]);
+  const [hasArrived, setHasArrived] = useState(false);
   const [requestPanelOpen, setRequestPanelOpen] = useState(false);
+  // simulation helpers: explicit route polyline and progress [0..1]
+  const [routePath, setRoutePath] = useState<Array<{ lat: number; lng: number }> | null>(null);
+  const [routeProgress, setRouteProgress] = useState<number>(0);
+  // simulation speed multiplier (1 = normal, >1 faster, <1 slower)
+  const [simSpeed, setSimSpeed] = useState<number>(1);
+  const movementStartRef = useRef<{ start: { lat: number; lng: number }; totalDist: number } | null>(null);
 
   // Mobile bottom-sheet state (px)
   const [bottomH, setBottomH] = useState<number>(() =>
@@ -177,20 +169,78 @@ export const DriverPage = () => {
   };
 
   const handleGoOnline = () => {
+    console.error('[DEBUG] 🔴 handleGoOnline clicked');
     setLoading(true);
-    // attempt to notify backend that driver is available
     (async () => {
       try {
-        await dispatch(setDriverAvailability('available') as any);
-        // if success, open search mode
+        console.error('[DEBUG] 📡 About to set availability to available...');
+        await setAvailability('available');
         setIsOnline(true);
-        setPendingRequests(dummyRequests);
+        console.error('[DEBUG] ✅ Successfully set online');
       } catch (e) {
-        console.warn('Failed to set availability', e);
+        console.error('[DEBUG] ❌ Failed to set availability:', e);
       } finally {
         setLoading(false);
       }
     })();
+  };
+
+  // Force-load trip by external id (developer/testing helper)
+  const [forceId, setForceId] = useState('');
+  const handleForceLoad = async () => {
+    if (!forceId) return;
+    setLoading(true);
+    try {
+      const res = await TripService.getTrip(forceId, { includeTrace: true });
+      const trip = res?.data;
+      if (!trip) {
+        alert('Trip not found');
+        return;
+      }
+
+      // Try to derive a shape compatible with existing RideRequest model
+      const ride: any = {
+        id: trip.id || trip.external_id || trip.externalId || forceId,
+        pickup: trip.origin?.address || trip.origin_address || (trip.origin && trip.origin.coords ? trip.origin.coords : undefined) || 'Origen',
+        drop: trip.destination?.address || trip.destination_address || 'Destino',
+        price: trip.price || trip.fare || 0,
+        passenger: trip.passenger || { id: trip.passenger_id || trip.passengerId } ,
+        pickupCoords: (trip.origin && trip.origin.coords) ? trip.origin.coords : (trip.origin_lat ? { lat: trip.origin_lat, lng: trip.origin_lng } : undefined),
+        dropCoords: (trip.destination && trip.destination.coords) ? trip.destination.coords : (trip.destination_lat ? { lat: trip.destination_lat, lng: trip.destination_lng } : undefined),
+        raw: trip,
+      };
+
+      // If trace points exist, use them as explicit route path and set driver location
+      const traces = trip.traces || trip.driverTrace || trip.driver_trace || trip.trace || trip.points;
+      if (Array.isArray(traces) && traces.length > 0) {
+        // convert to {lat,lng} if necessary
+        const path = traces.map((p: any) => {
+          if (p.lat !== undefined && p.lng !== undefined) return { lat: Number(p.lat), lng: Number(p.lng) };
+          if (p.latitude !== undefined && p.longitude !== undefined) return { lat: Number(p.latitude), lng: Number(p.longitude) };
+          if (Array.isArray(p) && p.length >= 2) return { lat: Number(p[0]), lng: Number(p[1]) };
+          return null;
+        }).filter(Boolean) as Array<{ lat: number; lng: number }>;
+        if (path.length) {
+          setRoutePath(path);
+          setRouteProgress(0);
+          // set driverLocation to first trace point so map centers
+          setDriverLocation(path[0]);
+        }
+      }
+
+      // If trip is still a pending request, show it in the pending queue; otherwise open ride details
+      if (trip.status && (trip.status === 'REQUESTED' || trip.status === 'PENDING')) {
+        // Redux will manage pending requests state now
+        setRequestPanelOpen(true);
+      } else {
+        setActiveRide(ride as RideRequest);
+      }
+    } catch (e) {
+      console.warn('Failed to load trip', e);
+      alert('Error cargando viaje desde servidor');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Geolocation behavior:
@@ -239,9 +289,9 @@ export const DriverPage = () => {
       try {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            setDriverLocation(coords);
-            try { driverTraceRef.current.push({ lat: coords.lat, lng: coords.lng, ts: new Date().toISOString() }); } catch (e) {}
+                const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                setDriverLocation(coords);
+                try { const p = { lat: coords.lat, lng: coords.lng, ts: new Date().toISOString() }; driverTraceRef.current.push(p); traceBufferRef.current.push(p); } catch (e) {}
           },
           (err) => console.warn('Geolocation getCurrentPosition error', err),
           { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
@@ -258,7 +308,7 @@ export const DriverPage = () => {
             (pos) => {
               const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
               setDriverLocation(coords);
-              try { driverTraceRef.current.push({ lat: coords.lat, lng: coords.lng, ts: new Date().toISOString() }); } catch (e) {}
+              try { const p = { lat: coords.lat, lng: coords.lng, ts: new Date().toISOString() }; driverTraceRef.current.push(p); traceBufferRef.current.push(p); } catch (e) {}
             },
             (err) => console.warn('Geolocation getCurrentPosition error', err),
             { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
@@ -288,14 +338,14 @@ export const DriverPage = () => {
           const current = driverLocationRef.current;
           if (!current) {
             setDriverLocation(raw);
-            try { driverTraceRef.current.push({ lat: raw.lat, lng: raw.lng, ts: new Date().toISOString() }); } catch (e) {}
+            try { const p = { lat: raw.lat, lng: raw.lng, ts: new Date().toISOString() }; driverTraceRef.current.push(p); traceBufferRef.current.push(p); } catch (e) {}
             return;
           }
 
           const dist = haversineMeters(current, raw);
           if (dist <= SMALL_MOVE_M) {
             setDriverLocation(raw);
-            try { driverTraceRef.current.push({ lat: raw.lat, lng: raw.lng, ts: new Date().toISOString() }); } catch (e) {}
+            try { const p = { lat: raw.lat, lng: raw.lng, ts: new Date().toISOString() }; driverTraceRef.current.push(p); traceBufferRef.current.push(p); } catch (e) {}
             if (pendingTimerRef.current !== null) {
               try { window.clearTimeout(pendingTimerRef.current); } catch (e) {}
               pendingTimerRef.current = null;
@@ -311,7 +361,7 @@ export const DriverPage = () => {
               const toApply = pendingLocRef.current;
               if (toApply) {
                 setDriverLocation(toApply);
-                try { driverTraceRef.current.push({ lat: toApply.lat, lng: toApply.lng, ts: new Date().toISOString() }); } catch (e) {}
+                try { const p = { lat: toApply.lat, lng: toApply.lng, ts: new Date().toISOString() }; driverTraceRef.current.push(p); traceBufferRef.current.push(p); } catch (e) {}
               }
               pendingLocRef.current = null;
               if (pendingTimerRef.current !== null) {
@@ -346,13 +396,11 @@ export const DriverPage = () => {
   const handleStopSearch = () => {
     (async () => {
       try {
-        await dispatch(setDriverAvailability('offline') as any);
+        await setAvailability('offline');
       } catch (e) {
         console.warn('Failed to set offline availability', e);
       }
       setIsOnline(false);
-      setPendingRequests([]);
-      setExpiredRequests([]);
       setRequestPanelOpen(false);
     })();
   };
@@ -361,12 +409,15 @@ export const DriverPage = () => {
     setLoading(true);
     (async () => {
       try {
-        // Ask backend to accept the trip (idempotent)
-        await dispatch(acceptTrip({ id: (ride as any).id }) as any);
+        // Ask backend to accept the trip (idempotent) and capture server response
+        const resultAction: any = await dispatch(acceptTrip({ id: (ride as any).id }) as any);
+        const payload = resultAction?.payload;
+        const serverId = payload?.id || payload?.tripId || (ride as any).id;
         setLoading(false);
-        setActiveRide(ride as any);
-        setPendingRequests([]);
-        setExpiredRequests([]);
+        // ensure activeRide has the authoritative trip id from server when available
+        const active: RideRequest = { ...(ride as any), id: serverId } as RideRequest;
+        setActiveRide(active);
+        // start trace sender will be started by effect when routePhase changes
         setRequestPanelOpen(false);
         // init driver location near the city center only if we don't have a real device location
         const start = { lat: (ride as any).pickupCoords.lat + 0.0015, lng: (ride as any).pickupCoords.lng - 0.002 };
@@ -378,9 +429,7 @@ export const DriverPage = () => {
         console.warn('Failed to accept trip on server, falling back to local accept', e);
         setLoading(false);
         // fallback to local accept behavior
-        setActiveRide(ride as any);
-        setPendingRequests([]);
-        setExpiredRequests([]);
+        setActiveRide(ride as RideRequest);
         setRequestPanelOpen(false);
         const start = { lat: (ride as any).pickupCoords.lat + 0.0015, lng: (ride as any).pickupCoords.lng - 0.002 };
         if (!driverLocation) setDriverLocation(start);
@@ -390,50 +439,48 @@ export const DriverPage = () => {
     })();
   };
 
-  // Polling: fetch available trips from backend when driver is available
+  // Trace buffer flush helpers
+  const flushTraces = async (tripId?: string) => {
+    const buf = traceBufferRef.current.slice();
+    if (!buf || buf.length === 0) return;
+    traceBufferRef.current = [];
+    if (!tripId && activeRide) tripId = (activeRide as any).id;
+    if (!tripId) return;
+    try {
+      await TripService.appendTrace(tripId as string, buf.map((p) => ({ lat: p.lat, lng: p.lng, ts: p.ts })));
+    } catch (e) {
+      console.warn('Failed to append trace to server, will buffer locally', e);
+      // re-queue traces for next attempt
+      traceBufferRef.current = buf.concat(traceBufferRef.current);
+    }
+  };
+
+  const startTraceSender = (tripId?: string) => {
+    if (traceFlushRef.current !== null) return; // already running
+    // flush interval every 5s
+    traceFlushRef.current = window.setInterval(() => {
+      flushTraces(tripId as string);
+    }, 5000) as unknown as number;
+  };
+
+  const stopTraceSender = async () => {
+    if (traceFlushRef.current !== null) {
+      try { window.clearInterval(traceFlushRef.current); } catch (e) {}
+      traceFlushRef.current = null;
+    }
+    // flush any remaining traces one last time
+    await flushTraces((activeRide as any)?.id);
+  };
+
+  // Start/stop trace sender when an activeRide exists and movement starts/stops
   useEffect(() => {
-    let pollId: number | null = null;
-    const startPoll = () => {
-      // immediate fetch
-      (async () => {
-        try {
-          const res = await TripService.getAvailable();
-          const items = (res?.data && Array.isArray(res.data)) ? res.data : [];
-          if (items.length > 0) setPendingRequests(items as any[]);
-        } catch (e) {
-          // keep previous pendingRequests on error
-          // console.warn('Error fetching available trips', e);
-        }
-      })();
-
-      pollId = window.setInterval(async () => {
-        try {
-          const res = await TripService.getAvailable();
-          const items = (res?.data && Array.isArray(res.data)) ? res.data : [];
-          // merge unique by id
-          setPendingRequests((prev) => {
-            const map = new Map(prev.map((p) => [(p as any).id, p]));
-            for (const it of items) map.set((it as any).id, it);
-            return Array.from(map.values()) as any[];
-          });
-        } catch (e) {
-          // ignore transient errors
-        }
-      }, 15000) as unknown as number;
-    };
-
-    const stopPoll = () => {
-      if (pollId !== null) {
-        window.clearInterval(pollId);
-        pollId = null;
-      }
-    };
-
-    if (availability === 'available') startPoll();
-    else stopPoll();
-
-    return () => stopPoll();
-  }, [availability]);
+    if (activeRide && routePhase !== 'idle') {
+      startTraceSender((activeRide as any).id);
+    } else {
+      stopTraceSender();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRide, routePhase]);
 
   const haversineMeters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
     const toRad = (v: number) => (v * Math.PI) / 180;
@@ -479,6 +526,14 @@ export const DriverPage = () => {
     setActiveRide(null);
   };
 
+  const handlePanic = () => {
+    try {
+      // Emit a panic event — UI / backend can listen to this in a real setup
+      window.dispatchEvent(new CustomEvent('toriGO:panic', { detail: { tripId: activeRide?.id } }));
+    } catch (e) {}
+    try { alert('¡Botón de pánico activado! Se ha notificado el sistema.'); } catch (e) {}
+  };
+
   const handleConfirmArrival = () => {
     // silent confirm arrival
   };
@@ -492,7 +547,7 @@ export const DriverPage = () => {
   // Helpers: movement and payloads
   const stopMovement = () => {
     if (movementRef.current) {
-      window.clearInterval(movementRef.current);
+      try { window.clearTimeout(movementRef.current); } catch (e) { try { window.clearInterval(movementRef.current); } catch (e) {} }
       movementRef.current = null;
     }
     setRoutePhase('idle');
@@ -519,15 +574,18 @@ export const DriverPage = () => {
             const path: Array<{ lat: number; lng: number }> = (route.overview_path || []).map((p: any) => ({ lat: p.lat(), lng: p.lng() }));
             if (!path.length) { fallbackLinearMovement(); return; }
 
-            // animate along the path
+            // set explicit route path for map rendering
+            setRoutePath(path);
+            setRouteProgress(0);
+
+            // animate along the path using recursive setTimeout so simSpeed changes take effect immediately
             let idx = 0;
-            const stepMs = 700; // time per point - adjust for speed
-            movementRef.current = window.setInterval(() => {
+            const step = () => {
               const next = path[idx];
               if (!next) {
-                // reached end
-                window.clearInterval(movementRef.current as number);
+                try { window.clearTimeout(movementRef.current as number); } catch (e) {}
                 movementRef.current = null;
+                setRouteProgress(1);
                 // arrival behavior
                 if (routePhase === 'toPickup') {
                   try { window.dispatchEvent(new CustomEvent('toriGO:arrived')); } catch {}
@@ -558,16 +616,27 @@ export const DriverPage = () => {
                     window.dispatchEvent(new CustomEvent('toriGO:tripFinished'));
                   }
                 }
+                // clear route after a short delay
+                setTimeout(() => setRoutePath(null), 1200);
                 stopMovement();
                 return;
               }
+
               setDriverLocation(() => {
                 const newPos = next;
-                try { driverTraceRef.current.push({ lat: newPos.lat, lng: newPos.lng, ts: new Date().toISOString() }); } catch (e) {}
+                try { const p = { lat: newPos.lat, lng: newPos.lng, ts: new Date().toISOString() }; driverTraceRef.current.push(p); traceBufferRef.current.push(p); } catch (e) {}
+                // update progress
+                const progress = Math.min(1, idx / Math.max(1, path.length - 1));
+                setRouteProgress(progress);
                 return newPos;
               });
+
               idx += 1;
-            }, stepMs) as unknown as number;
+              const delay = Math.max(60, Math.round(700 / Math.max(0.1, simSpeed)));
+              movementRef.current = window.setTimeout(step, delay) as unknown as number;
+            };
+            // start
+            step();
           } catch (e) {
             fallbackLinearMovement();
           }
@@ -579,19 +648,32 @@ export const DriverPage = () => {
     };
 
     const fallbackLinearMovement = () => {
-      movementRef.current = window.setInterval(() => {
+      // prepare a simple 2-point route for progress calculation
+      const start = driverLocation || { lat: target.lat, lng: target.lng };
+      movementStartRef.current = { start, totalDist: haversineMeters(start, target) };
+      setRoutePath([start, target]);
+      setRouteProgress(0);
+
+      // recursive movement step so simSpeed changes take effect immediately
+      const stepFallback = () => {
         setDriverLocation((prev) => {
-          if (!prev) return target;
-          const baseStep = 0.0006;
-          const variability = 0.6 + Math.random() * 0.8;
-          const step = baseStep * variability;
+          if (!prev) {
+            // schedule next just in case
+            const delay0 = Math.max(60, Math.round(600 / Math.max(0.1, simSpeed)));
+            movementRef.current = window.setTimeout(stepFallback, delay0) as unknown as number;
+            return target;
+          }
+          const baseStep = 0.00045 * Math.max(0.4, simSpeed);
           const dlat = target.lat - prev.lat;
           const dlng = target.lng - prev.lng;
           const dist = Math.sqrt(dlat * dlat + dlng * dlng);
           if (dist < 0.0005) {
+            // arrived
             if (routePhase === 'toPickup') {
               try { window.dispatchEvent(new CustomEvent('toriGO:arrived')); } catch {}
               stopMovement();
+              setRouteProgress(1);
+              setTimeout(() => setRoutePath(null), 800);
               return target;
             }
             if (routePhase === 'toDrop') {
@@ -620,16 +702,33 @@ export const DriverPage = () => {
                 driverTraceRef.current = [];
                 window.dispatchEvent(new CustomEvent('toriGO:tripFinished'));
               }
+              setRouteProgress(1);
+              setTimeout(() => setRoutePath(null), 800);
               return target;
             }
           }
-          const nx = prev.lat + (dlat / dist) * step;
-          const ny = prev.lng + (dlng / dist) * step;
+          const nx = prev.lat + (dlat / dist) * baseStep;
+          const ny = prev.lng + (dlng / dist) * baseStep;
           const newPos = { lat: nx, lng: ny };
-          try { driverTraceRef.current.push({ lat: newPos.lat, lng: newPos.lng, ts: new Date().toISOString() }); } catch (e) {}
+          try { const p = { lat: newPos.lat, lng: newPos.lng, ts: new Date().toISOString() }; driverTraceRef.current.push(p); traceBufferRef.current.push(p); } catch (e) {}
+          // update progress using haversine relative to start
+          try {
+            const ms = movementStartRef.current;
+            if (ms) {
+              const done = haversineMeters(ms.start, newPos);
+              const prog = Math.min(1, ms.totalDist > 0 ? done / ms.totalDist : 1);
+              setRouteProgress(prog);
+            }
+          } catch (e) {}
+          // schedule next step reading current simSpeed
+          const delay = Math.max(60, Math.round(600 / Math.max(0.1, simSpeed)));
+          movementRef.current = window.setTimeout(stepFallback, delay) as unknown as number;
           return newPos;
         });
-      }, 800) as unknown as number;
+      };
+
+      // start fallback movement
+      stepFallback();
     };
 
     // start route animation
@@ -757,14 +856,13 @@ export const DriverPage = () => {
 
   const handleExpire = useCallback(
     (id: string) => {
-      const expired = pendingRequests.find((r) => r.id === id);
-      if (expired) setExpiredRequests((prev) => [...prev, expired]);
-      setPendingRequests((prev) => prev.filter((r) => r.id !== id));
+      // Note: Redux will automatically update pending requests on next poll
+      console.log('[DEBUG] 🗑️  Request expired:', id);
     },
     [pendingRequests]
   );
 
-  // Listen for events from RideDetails (trip finished -> open requests)
+  // Event listeners for window events (trip lifecycle)
   useEffect(() => {
     const onFinished = () => {
       // stop any movement and clear active ride when trip finishes
@@ -784,9 +882,11 @@ export const DriverPage = () => {
     };
 
     const onArrivedEvent = () => {
-      // when arrived to pickup, set state to waiting; waiting panel will call startTrip
-      // we'll just log for now
-      console.log('Simulated: driver arrived to pickup');
+        // when arrived to pickup, set state to waiting and stop movement; UI will allow confirmation
+        try { stopMovement(); } catch (e) {}
+        setHasArrived(true);
+        setRoutePhase('idle');
+        console.log('Simulated: driver arrived to pickup (paused)');
     };
 
     const onCanceled = () => {
@@ -800,6 +900,7 @@ export const DriverPage = () => {
     window.addEventListener('toriGO:tripStarted', onTripStarted as EventListener);
     window.addEventListener('toriGO:arrived', onArrivedEvent as EventListener);
     window.addEventListener('toriGO:tripCanceled', onCanceled as EventListener);
+    
     return () => {
       window.removeEventListener("toriGO:tripFinished", onFinished as EventListener);
       window.removeEventListener("toriGO:openRequests", onOpenRequests as EventListener);
@@ -807,7 +908,39 @@ export const DriverPage = () => {
       window.removeEventListener('toriGO:arrived', onArrivedEvent as EventListener);
       window.removeEventListener('toriGO:tripCanceled', onCanceled as EventListener);
     };
-  }, []);
+  }, [activeRide]);
+
+  // Helper: build Google Maps directions URL
+  const buildGoogleMapsDirections = (origin: { lat: number; lng: number } | null | undefined, destination: { lat: number; lng: number } | null | undefined) => {
+    if (!origin || !destination) return '#';
+    const o = `${origin.lat},${origin.lng}`;
+    const d = `${destination.lat},${destination.lng}`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}&travelmode=driving`;
+  };
+
+  // Confirm that driver has arrived (simulate verification code) and then start trip to destination
+  const confirmArrivalAndStart = async () => {
+    if (!activeRide) return;
+    const tripId = (activeRide as any).id;
+    try {
+      // mark arrived on server (best-effort)
+      try { await TripService.markArrived(tripId, { lat: driverLocation?.lat, lng: driverLocation?.lng }); } catch (e) { console.warn('markArrived failed', e); }
+      // simulated verification: prompt for code but accept any
+      window.prompt('Ingrese código de verificación (simulado):', '0000');
+      // in real flow validate `code`; here proceed anyway
+      try { await TripService.markStarted(tripId); } catch (e) { console.warn('markStarted failed', e); }
+      // clear arrived flag and set phase to toDrop
+      setHasArrived(false);
+      setRoutePhase('toDrop');
+      // ensure we have coords for destination
+      const dest = (activeRide as any).dropCoords || (activeRide as any).destination || (activeRide as any).destination?.coords;
+      if (dest) startMovingTowards(dest);
+      // notify other listeners
+      try { window.dispatchEvent(new CustomEvent('toriGO:tripStarted')); } catch (e) {}
+    } catch (e) {
+      console.error('Failed to confirm arrival/start trip', e);
+    }
+  };
 
   return (
     <div className="relative w-full h-screen bg-gray-100 overflow-hidden">
@@ -817,7 +950,8 @@ export const DriverPage = () => {
         {loading && <LoadingOverlay message="Cargando..." />}
 
         <SlidingSidebar open={requestPanelOpen} onClose={() => setRequestPanelOpen(false)} title="Solicitudes">
-          <RequestList requests={expiredRequests} onAccept={handleAcceptRide} onStopSearch={handleStopSearch} />
+          {(() => { if (pendingRequests.length > 0) console.log('[DEBUG] 🎯 RequestList renderizado con', pendingRequests.length, 'viajes'); return null; })()}
+          <RequestList requests={pendingRequests} onAccept={handleAcceptRide} onStopSearch={handleStopSearch} />
         </SlidingSidebar>
 
         {activeRide && (
@@ -851,16 +985,54 @@ export const DriverPage = () => {
                     ) : (
                       <button onClick={handleStopSearch} className="px-3 py-1 rounded-md bg-gray-800 text-white text-sm">Desconectar</button>
                     )}
+                    {/* Force-load trip by external id for testing */}
+                    <div className="flex items-center gap-2 ml-2">
+                      <input value={forceId} onChange={(e) => setForceId(e.target.value)} placeholder="external_id" className="text-xs px-2 py-1 rounded border" />
+                      <button onClick={handleForceLoad} className="px-2 py-1 rounded bg-blue-600 text-white text-xs">Cargar</button>
+                    </div>
+                    {/* Directions / arrival helpers */}
+                    {activeRide && driverLocation && routePhase === 'toPickup' && (() => {
+                      const pickup = (activeRide as any).pickupCoords || (activeRide as any).origin || (activeRide as any).origin?.coords;
+                      const mapsUrl = buildGoogleMapsDirections(driverLocation, pickup);
+                      return (
+                        <a className="ml-2 px-2 py-1 rounded bg-yellow-500 text-white text-xs" href={mapsUrl} target="_blank" rel="noreferrer">Abrir en Google Maps (a pasajero)</a>
+                      );
+                    })()}
+                    {hasArrived && activeRide && driverLocation && (() => {
+                      const dest = (activeRide as any).dropCoords || (activeRide as any).destination || (activeRide as any).destination?.coords;
+                      const mapsUrl2 = buildGoogleMapsDirections(driverLocation, dest);
+                      return (
+                        <div className="ml-2 flex items-center gap-2">
+                          <button onClick={confirmArrivalAndStart} className="px-2 py-1 rounded bg-green-600 text-white text-xs">Confirmar recogida e iniciar</button>
+                          <a className="px-2 py-1 rounded bg-yellow-500 text-white text-xs" href={mapsUrl2} target="_blank" rel="noreferrer">Ir en Google Maps (a destino)</a>
+                        </div>
+                      );
+                    })()}
                   </div>
+                  {/* Panic / quick cancel controls */}
+                  {activeRide && routePhase === 'toDrop' && (
+                    <div className="absolute top-20 right-4 z-50 flex flex-col gap-3">
+                      <button onClick={handlePanic} className="bg-red-600 text-white p-3 rounded-full shadow-lg hover:bg-red-700 transition" title="Botón de pánico">
+                        ⛑
+                      </button>
+                      <button onClick={handleCancelRide} className="bg-white text-red-600 p-2 rounded-md shadow hover:bg-gray-50 transition" title="Cancelar viaje">
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
                   {activeRide && driverLocation ? (
                     <div className="flex-1 h-full">
-                      <DriverMap
-                        origin={(activeRide as any).pickupCoords}
-                        destination={(activeRide as any).dropCoords}
-                        driverLocation={driverLocation}
-                        showRoute={routePhase !== 'idle'}
-                        showMarkers={true}
-                      />
+                                <DriverMap
+                                  origin={(activeRide as any).pickupCoords}
+                                  destination={(activeRide as any).dropCoords}
+                                  driverLocation={driverLocation}
+                                  showRoute={routePhase !== 'idle'}
+                                  showMarkers={true}
+                                  // provide explicit route path and progress for polyline rendering
+                                  routePath={routePath || undefined}
+                                  routeProgress={routeProgress}
+                                  showRouteProgress={true}
+                                />
                     </div>
                   ) : (
                     // Show a default DriverMap centered on Lima Metropolitana so the map always
@@ -887,6 +1059,27 @@ export const DriverPage = () => {
                       </div>
                     );
                   })()}
+
+                  {/* Progress bar for route */}
+                  {activeRide && routePhase !== 'idle' && (
+                    <div className="absolute top-16 left-0 right-0 z-50 flex items-center justify-center pointer-events-none">
+                      <div className="w-11/12 max-w-2xl bg-white/70 p-1 rounded-full shadow-md pointer-events-auto">
+                        <div className="relative h-3 rounded-full bg-gray-200 overflow-hidden">
+                          <div className="absolute left-0 top-0 bottom-0 bg-green-500" style={{ width: `${Math.round((routeProgress || 0) * 100)}%` }} />
+                        </div>
+                        <div className="text-xs text-gray-700 text-center mt-1">Progreso ruta: {Math.round((routeProgress || 0) * 100)}%</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Simulation speed control */}
+                  {activeRide && (
+                    <div className="absolute top-4 left-20 z-50 flex items-center gap-2 bg-white/90 p-2 rounded-md shadow">
+                      <label className="text-xs text-gray-600 mr-2">Velocidad:</label>
+                      <input type="range" min="0.5" max="3" step="0.1" value={simSpeed} onChange={(e) => setSimSpeed(Number(e.target.value))} />
+                      <div className="text-xs text-gray-700 ml-2">x{simSpeed.toFixed(1)}</div>
+                    </div>
+                  )}
 
             {isOnline && !activeRide && !requestPanelOpen && (
               <button onClick={() => setRequestPanelOpen(true)} className="absolute top-4 left-4 z-50 bg-white text-gray-700 p-2 rounded-md shadow-md hover:bg-gray-100 transition">

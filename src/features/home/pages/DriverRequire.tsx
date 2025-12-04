@@ -7,7 +7,7 @@ export const driverRequireStyles = {
   // Nueva sección hero
   heroSection: "bg-white py-16 px-6 md:px-12",
   heroContainer: "max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center",
-  heroContent: "space-y-6",
+  heroContent: "space-y-6 flex flex-col items-center md:items-start text-center md:text-left",
   heroTitle: "text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-4",
   heroDescription: "text-gray-600 text-lg md:text-xl leading-relaxed mb-8",
   heroImageContainer: "bg-gray-100 rounded-lg h-80 md:h-96 overflow-hidden",
@@ -24,10 +24,10 @@ export const driverRequireStyles = {
 
   registerSection: "py-16 px-6 md:px-12",
   registerTitle: "text-center text-3xl md:text-4xl font-semibold mb-10",
-  registerGrid: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto",
-  registerCard: "rounded-xl bg-white text-center max-w-xs mx-auto p-6 flex flex-col items-center shadow",
-  registerCardTitle: "w-12 h-12 rounded-full bg-[#77160e] text-white flex items-center justify-center mb-4 text-lg font-bold",
-  registerCardText: "font-medium text-gray-600 text-center",
+  registerGrid: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto auto-rows-fr items-stretch",
+  registerCard: "rounded-xl bg-[#77160e] text-white text-center w-full p-6 flex flex-col items-center shadow h-full",
+  registerCardTitle: "w-12 h-12 rounded-full bg-white text-[#77160e] flex items-center justify-center mb-4 text-lg font-bold",
+  registerCardText: "font-medium text-white text-center",
 
   preguntasSection: "bg-gray-50 py-16 px-6 md:px-12 mb-16",
   preguntasTitle: "text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12",
@@ -47,6 +47,8 @@ export const driverRequireStyles = {
   ctaTitle: "text-3xl md:text-4xl font-bold text-white mb-6",
   ctaDescription: "text-lg md:text-xl text-white/90 mb-8 leading-relaxed",
   ctaButton: "inline-block bg-white text-[#77160e] px-8 py-3 rounded-full font-bold text-base hover:bg-gray-100 transition-all duration-200 transform hover:scale-105 shadow-lg"
+  ,
+  ctaButtonHero: "inline-block bg-[#77160e] text-white px-8 py-3 rounded-full font-bold text-base hover:bg-[#5f0f0b] transition-all duration-200 transform hover:scale-105 shadow-lg"
 }
 
 const faqData = [
@@ -116,7 +118,14 @@ export const DriverRequire = () => {
               asistencia 24/7 y bonificaciones semanales de hasta S/ 200. La app ToriGo! Pro te mostrará los 
               lugares donde puedes ganar más y te ayudará a llegar del punto A al punto B lo más rápido 
               posible con nuestro avanzado sistema de navegación.
+              
             </p>
+            <button
+              onClick={handleRegisterClick}
+              className={driverRequireStyles.ctaButtonHero}
+            >
+              Regístrate aquí
+            </button>
           </div>
 
           {/* Imagen */}
@@ -279,14 +288,9 @@ export const DriverRequire = () => {
                   Únete a miles de conductores que ya están generando ingresos con ToroGo. 
                   Regístrate hoy y comienza tu camino hacia la libertad financiera.
                 </p>
-                <button 
-                  onClick={handleRegisterClick}
-                  className={driverRequireStyles.ctaButton}
-                >
-                  Regístrate aquí
-                </button>
+                
               </div>
             </div>
-    </div>     
-  );
+    </div>     
+  );
 };

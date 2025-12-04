@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Component } from 'react';
+import type { ErrorInfo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   User,
   Star,
@@ -10,11 +12,10 @@ import {
   Check,
   X,
   Loader2,
-  Truck,
 } from 'lucide-react';
 import TopBar from '../../../components/TopBar';
 import iconMoto from '../../../assets/iconmoto.png';
-import { postLicense, postSoat, postTechnicalReview } from '../../../services/DriverService';
+import { postLicense, postSoat, postTechnicalReview, approveRequest, updateLicenseExpiry, updateSoatExpiry, updateTechnicalReviewExpiry } from '../../../services/DriverService';
 import { disableMyAccount } from '../../../services/DriverService';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { getDriverProfile, updateDriverProfile } from '../driverSlice';
@@ -144,10 +145,10 @@ const DriverProfile: React.FC = () => {
       const soatExpiry = toInputDate(sp.soatExpiryDate ?? sp.raw?.motorcycle?.soat_expiry_date ?? sp.raw?.motorcycle?.soatExpiryDate);
       if (soatExpiry) normalized.soatExpiryDate = soatExpiry;
 
-      const licenseIssue = toInputDate(sp.licenseIssueDate ?? sp.raw?.driver?.license_info?.issue_date);
+      const licenseIssue = toInputDate(sp.licenseIssueDate ?? sp.raw?.driver?.license_issue_date ?? sp.raw?.driver?.license_info?.issue_date);
       if (licenseIssue) normalized.licenseIssueDate = licenseIssue;
 
-      const licenseExpiry = toInputDate(sp.licenseExpiryDate ?? sp.raw?.driver?.license_info?.expiration_date ?? sp.raw?.driver?.license_info?.expires_at);
+      const licenseExpiry = toInputDate(sp.licenseExpiryDate ?? sp.raw?.driver?.license_expiry_date ?? sp.raw?.driver?.license_info?.expiration_date ?? sp.raw?.driver?.license_info?.expires_at);
       if (licenseExpiry) normalized.licenseExpiryDate = licenseExpiry;
 
       // determine license status based on expiry proximity
@@ -168,7 +169,7 @@ const DriverProfile: React.FC = () => {
       // technical review dates
       const tr = sp.technicalReview ?? sp.raw?.technical_review ?? {};
       const trReview = toInputDate(tr.review_date ?? tr.reviewDate ?? sp.raw?.motorcycle?.technical_review_date);
-      const trExpires = toInputDate(tr.expires_at ?? tr.expiresAt ?? '');
+      const trExpires = toInputDate(tr.expires_at ?? tr.expiresAt ?? sp.raw?.motorcycle?.technical_review_expires_at ?? '');
       normalized.technicalReview = {
         reviewDate: trReview ?? (sp.technicalReview?.reviewDate ?? undefined),
         expiresAt: trExpires ?? (sp.technicalReview?.expiresAt ?? undefined),
@@ -220,6 +221,60 @@ const DriverProfile: React.FC = () => {
     // keep loading flag synced
     setLoadingProfile(storeLoading);
   }, [storedProfile, storeLoading]);
+
+  // Auto-save license expiry date when changed
+  useEffect(() => {
+    if (!originalProfileRef.current) return;
+    const original = originalProfileRef.current.licenseExpiryDate ?? '';
+    const current = profileData.licenseExpiryDate ?? '';
+    if (original !== current && current !== '') {
+      const timer = setTimeout(async () => {
+        try {
+          await updateLicenseExpiry(current);
+          setNotification({ visible: true, status: 'success', message: 'Fecha de licencia actualizada' });
+        } catch (err: any) {
+          setNotification({ visible: true, status: 'error', message: 'Error al actualizar fecha de licencia' });
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [profileData.licenseExpiryDate]);
+
+  // Auto-save SOAT expiry date when changed
+  useEffect(() => {
+    if (!originalProfileRef.current) return;
+    const original = originalProfileRef.current.soatExpiryDate ?? '';
+    const current = profileData.soatExpiryDate ?? '';
+    if (original !== current && current !== '') {
+      const timer = setTimeout(async () => {
+        try {
+          await updateSoatExpiry(current);
+          setNotification({ visible: true, status: 'success', message: 'Fecha de SOAT actualizada' });
+        } catch (err: any) {
+          setNotification({ visible: true, status: 'error', message: 'Error al actualizar fecha de SOAT' });
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [profileData.soatExpiryDate]);
+
+  // Auto-save technical review expiry date when changed
+  useEffect(() => {
+    if (!originalProfileRef.current) return;
+    const original = originalProfileRef.current.technicalReview?.expiresAt ?? '';
+    const current = profileData.technicalReview?.expiresAt ?? '';
+    if (original !== current && current !== '') {
+      const timer = setTimeout(async () => {
+        try {
+          await updateTechnicalReviewExpiry(current);
+          setNotification({ visible: true, status: 'success', message: 'Fecha de revisión técnica actualizada' });
+        } catch (err: any) {
+          setNotification({ visible: true, status: 'error', message: 'Error al actualizar fecha de revisión técnica' });
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [profileData.technicalReview?.expiresAt]);
 
   
 
@@ -280,16 +335,29 @@ const DriverProfile: React.FC = () => {
   const [confirmDisableOpen, setConfirmDisableOpen] = useState<boolean>(false);
   const [isDisabling, setIsDisabling] = useState<boolean>(false);
 
-  // Change vehicle modal state
-  const [changeVehicleOpen, setChangeVehicleOpen] = useState<boolean>(false);
-  const [newPlate, setNewPlate] = useState<string>('');
-  const [changeVehicleError, setChangeVehicleError] = useState<string | null>(null);
-  const [isChangingVehicle, setIsChangingVehicle] = useState<boolean>(false);
-
   const openDocModal = (type: 'license' | 'soat' | 'technical') => {
     setDocType(type);
-    // For SOAT renewals we keep the modal minimal (no insurer input). Prefill nothing here.
-    setDocForm({});
+    // Pre-fill fields based on document type
+    if (type === 'license') {
+      setDocForm({ 
+        license_number: profileData.licenseNumber ?? '',
+        issue_date: profileData.licenseIssueDate ?? '',
+        expiration_date: profileData.licenseExpiryDate ?? ''
+      });
+    } else if (type === 'soat') {
+      setDocForm({ 
+        vehicle_plate: profileData.vehicleInfo.plate ?? '', 
+        insurance_policy: profileData.soatNumber ?? '',
+        expiration_date: profileData.soatExpiryDate ?? ''
+      });
+    } else if (type === 'technical') {
+      setDocForm({ 
+        plate: profileData.vehicleInfo.plate ?? '',
+        review_date: profileData.technicalReview?.reviewDate ?? '',
+        expires_at: profileData.technicalReview?.expiresAt ?? '',
+        passed: profileData.technicalReview?.passed ?? false
+      });
+    }
     setDocFile(null);
     setDocModalOpen(true);
   };
@@ -300,6 +368,32 @@ const DriverProfile: React.FC = () => {
 
   const handleDocFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
+    // basic client-side validation for license photos: require image and reasonable size
+    if (file) {
+      // license and technical reviews: images only, max 6MB
+      if (docType === 'license' || docType === 'technical') {
+        if (!file.type.startsWith('image/') && !file.name.toLowerCase().endsWith('.avif')) {
+          alert('El archivo debe ser una imagen (jpg, png, avif, ...).');
+          return;
+        }
+        if (file.size > 6 * 1024 * 1024) {
+          alert('La imagen debe pesar menos de 6MB.');
+          return;
+        }
+      }
+      // SOAT: allow images or PDF (user may upload a scanned PDF); max 8MB
+      if (docType === 'soat') {
+        const okType = file.type.startsWith('image/') || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        if (!okType) {
+          alert('El archivo de SOAT debe ser una imagen o PDF.');
+          return;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+          alert('El archivo de SOAT debe pesar menos de 8MB.');
+          return;
+        }
+      }
+    }
     setDocFile(file);
   };
 
@@ -307,31 +401,55 @@ const DriverProfile: React.FC = () => {
     if (!docType) return;
     try {
       // prepare form/data
+      const appendMetadataToForm = (fd: FormData) => {
+        Object.entries(docForm).forEach(([k, v]) => { if (v !== undefined && v !== null) fd.append(k, String(v)); });
+      };
+
+      let responseData: any = null;
+      // require file for license, soat and technical renewals (photo/document needed)
+      if ((docType === 'license' || docType === 'soat' || docType === 'technical') && !docFile) {
+        alert('Debes adjuntar el archivo requerido para esta solicitud (licencia/SOAT/revisión técnica).');
+        return;
+      }
+
       if (docFile) {
         const fd = new FormData();
-        // append metadata depending on type
-        // append metadata (we intentionally do not force insurer for simple renewals)
-        Object.entries(docForm).forEach(([k, v]) => { if (v !== undefined && v !== null) fd.append(k, String(v)); });
+        appendMetadataToForm(fd);
         fd.append('file', docFile);
 
-        let res;
-        if (docType === 'license') res = await postLicense(fd);
-        else if (docType === 'soat') res = await postSoat(fd);
-        else res = await postTechnicalReview(fd);
-        const inserted = res.data;
-        setPendingDocuments(prev => [inserted, ...prev]);
-        alert('Documento enviado. Quedó en estado Pendiente.');
+        if (docType === 'license') responseData = await postLicense(fd);
+        else if (docType === 'soat') responseData = await postSoat(fd);
+        else responseData = await postTechnicalReview(fd);
       } else {
-        // send json
         const payload = { ...docForm };
-        let res;
-        if (docType === 'license') res = await postLicense(payload as any);
-        else if (docType === 'soat') res = await postSoat(payload as any);
-        else res = await postTechnicalReview(payload as any);
-        const inserted = res.data;
-        setPendingDocuments(prev => [inserted, ...prev]);
-        alert('Documento enviado. Quedó en estado Pendiente.');
+        if (docType === 'license') responseData = await postLicense(payload as any);
+        else if (docType === 'soat') responseData = await postSoat(payload as any);
+        else responseData = await postTechnicalReview(payload as any);
       }
+
+      // Normalize the returned object: some endpoints return { license: {...} }, { soat: {...} } or { review: {...} }
+      const pickInserted = (res: any) => {
+        if (!res) return null;
+        if (res.license) return { ...res.license, _meta: { kind: 'license', message: res.message } };
+        if (res.soat) return { ...res.soat, _meta: { kind: 'soat', message: res.message } };
+        if (res.review) return { ...res.review, _meta: { kind: 'technical', message: res.message } };
+        // fallback: the service may return the inserted object directly
+        return { ...res, _meta: { kind: docType } };
+      };
+
+      const insertedRaw = pickInserted(responseData);
+      if (insertedRaw) {
+        // derive common fields for UI
+        const insertedNormalized = {
+          ...insertedRaw,
+          type: insertedRaw._meta?.kind ?? (docType === 'technical' ? 'technical' : docType),
+          status: insertedRaw.status ?? insertedRaw.state ?? 'Pendiente',
+          requested_at: insertedRaw.requested_at ?? insertedRaw.created_at ?? insertedRaw.createdAt ?? new Date().toISOString(),
+          file: insertedRaw.file ?? insertedRaw.file_path ?? insertedRaw.filePath ?? undefined
+        };
+        setPendingDocuments(prev => [insertedNormalized, ...prev]);
+      }
+      alert('Documento enviado. Quedó en estado Pendiente.');
 
       setDocModalOpen(false);
       setDocType(null);
@@ -343,6 +461,89 @@ const DriverProfile: React.FC = () => {
       console.error('submitDocument error', err);
       const msg = err?.response?.data?.message ?? 'Error al enviar documento';
       alert(msg);
+    }
+  };
+
+  // Confirm a pending license request (validate photo visually) and apply dates to official registry
+  const confirmPendingLicense = async (d: any) => {
+    if (!d) return;
+    if (!(d._meta?.kind === 'license' || (d.type && String(d.type).toLowerCase().includes('license')))) {
+      alert('Documento no es una solicitud de licencia');
+      return;
+    }
+    // Use the dates from the pending request when available
+    const issue = d.issue_date ?? d.issueDate ?? profileData.licenseIssueDate ?? '';
+    const exp = d.expiration_date ?? d.expirationDate ?? profileData.licenseExpiryDate ?? '';
+    if (!issue || !exp) {
+      alert('La solicitud no contiene fechas válidas para aplicar.');
+      return;
+    }
+    try {
+        setIsSaving(true);
+        // Call backend approve endpoint to apply the pending license request
+        await approveRequest('license', d.id);
+        // mark document as applied locally
+        setPendingDocuments(prev => prev.map((pd) => pd.id === d.id ? { ...pd, status: 'approved' } : pd));
+        alert('Fechas aplicadas correctamente al registro oficial.');
+        await dispatch(getDriverProfile() as any);
+    } catch (err: any) {
+      console.error('confirmPendingLicense error', err);
+      alert(err?.response?.data?.message ?? err?.message ?? 'No fue posible aplicar las fechas');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const confirmPendingSoat = async (d: any) => {
+    if (!d) return;
+    if (!(d._meta?.kind === 'soat' || (d.type && String(d.type).toLowerCase().includes('soat')))) {
+      alert('Documento no es una solicitud de SOAT');
+      return;
+    }
+    const policy = d.insurance_policy ?? d.insurancePolicy ?? d.policy_number ?? null;
+    const exp = d.expiration_date ?? d.expirationDate ?? null;
+    if (!policy || !exp) {
+      alert('La solicitud no contiene número de póliza o fecha de vencimiento válidos.');
+      return;
+    }
+    try {
+        setIsSaving(true);
+        // Call backend approve endpoint to apply the pending SOAT request
+        await approveRequest('soat', d.id);
+        setPendingDocuments(prev => prev.map((pd) => pd.id === d.id ? { ...pd, status: 'approved' } : pd));
+        alert('SOAT aplicado correctamente al registro oficial.');
+        await dispatch(getDriverProfile() as any);
+    } catch (err: any) {
+      console.error('confirmPendingSoat error', err);
+      alert(err?.response?.data?.message ?? err?.message ?? 'No fue posible aplicar la póliza SOAT');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const confirmPendingTechnical = async (d: any) => {
+    if (!d) return;
+    if (!(d._meta?.kind === 'technical' || (d.type && String(d.type).toLowerCase().includes('technical')) || (d.type && String(d.type).toLowerCase().includes('revisión')))) {
+      alert('Documento no es una solicitud de revisión técnica');
+      return;
+    }
+    const reviewDate = d.review_date ?? d.reviewDate ?? d.reviewDate ?? null;
+    if (!reviewDate) {
+      alert('La solicitud no contiene fecha de revisión válida.');
+      return;
+    }
+    try {
+        setIsSaving(true);
+        // Call backend approve endpoint to insert a new technical_review record and update motorcycle
+        await approveRequest('technical', d.id);
+        setPendingDocuments(prev => prev.map((pd) => pd.id === d.id ? { ...pd, status: 'approved' } : pd));
+        alert('Revisión técnica aplicada correctamente al registro oficial.');
+        await dispatch(getDriverProfile() as any);
+    } catch (err: any) {
+      console.error('confirmPendingTechnical error', err);
+      alert(err?.response?.data?.message ?? err?.message ?? 'No fue posible aplicar la revisión técnica');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -366,39 +567,6 @@ const DriverProfile: React.FC = () => {
     } finally {
       setIsDisabling(false);
       setConfirmDisableOpen(false);
-    }
-  };
-
-  // Change vehicle handlers
-  const openChangeVehicle = () => {
-    setNewPlate('');
-    setChangeVehicleError(null);
-    setChangeVehicleOpen(true);
-  };
-
-  const submitChangeVehicle = async () => {
-    if (!newPlate || String(newPlate).trim() === '') {
-      setChangeVehicleError('Ingrese la nueva placa');
-      return;
-    }
-    setIsChangingVehicle(true);
-    setChangeVehicleError(null);
-    try {
-      // call update profile endpoint to request plate change (backend enforces SOAT+TR existence)
-      const body = { motorcycle: { plate: newPlate.trim().toUpperCase() } };
-      await (dispatch(updateDriverProfile(body) as any)).unwrap();
-      // if backend accepted, refresh profile and close modal
-      await dispatch(getDriverProfile() as any);
-      setChangeVehicleOpen(false);
-      setNewPlate('');
-      setChangeVehicleError(null);
-      alert('Vehículo actualizado correctamente');
-    } catch (err: any) {
-      console.error('change vehicle error', err);
-      const msg = err?.payload?.message ?? err?.response?.data?.message ?? err?.message ?? 'Error al cambiar vehículo';
-      setChangeVehicleError(String(msg));
-    } finally {
-      setIsChangingVehicle(false);
     }
   };
 
@@ -470,6 +638,15 @@ const DriverProfile: React.FC = () => {
         const orig = originalProfileRef.current;
         const issueChanged = !orig || (String(profileData.licenseIssueDate ?? '') !== String(orig.licenseIssueDate ?? orig.raw?.driver?.license_info?.issue_date ?? ''));
         const expChanged = !orig || (String(profileData.licenseExpiryDate ?? '') !== String(orig.licenseExpiryDate ?? orig.raw?.driver?.license_info?.expiration_date ?? ''));
+        // If there is a pending license request, require the user to validate the photo
+        const hasPendingLicenseRequest = pendingDocuments.some((pd: any) => (pd._meta?.kind === 'license' || String(pd.type ?? '').toLowerCase().includes('license')) && (pd.status ?? pd.state ?? 'Pendiente').toString().toLowerCase() === 'pending');
+        if ((issueChanged || expChanged) && hasPendingLicenseRequest) {
+          // Do not include license date changes here; instruct user to validate and apply from pending document
+          setNotification({ visible: true, status: 'error', message: 'Hay una solicitud de renovación de licencia pendiente. Valida la foto desde Documentos Pendientes para aplicar las fechas.' });
+          setIsSaving(false);
+          return;
+        }
+
         if (issueChanged || expChanged) {
           body.driver = {} as any;
           if (issueChanged) body.driver.license_issue_date = profileData.licenseIssueDate ?? null;
@@ -601,11 +778,38 @@ const DriverProfile: React.FC = () => {
                 <div className="ml-2">
                   <p className="text-sm text-yellow-800 font-medium">Documentos pendientes</p>
                   <ul className="mt-2 text-sm text-yellow-700">
-                    {pendingDocuments.map((d: any, idx: number) => (
-                      <li key={idx} className="mb-1">
-                        <strong>{d.type ?? d.document_type ?? 'Documento'}</strong> — {d.status ?? d.state ?? 'Pendiente'} {d.requested_at ? `· ${new Date(d.requested_at).toLocaleDateString()}` : ''}
-                      </li>
-                    ))}
+                    {pendingDocuments.map((d: any, idx: number) => {
+                      const fp = d.file ?? d.file_path ?? d.filePath ?? null;
+                      return (
+                        <li key={idx} className="mb-1">
+                          <div className="flex items-center space-x-2">
+                            <div className="flex-1">
+                              <strong>{(d.type ?? d.document_type ?? d._meta?.kind ?? 'Documento').toString()}</strong>
+                              <span className="ml-2">— {d.status ?? d.state ?? 'Pendiente'}</span>
+                              {d.requested_at ? <span className="ml-2 text-xs text-yellow-800">· {new Date(d.requested_at).toLocaleDateString()}</span> : null}
+                            </div>
+                            {fp ? (
+                              <div>
+                                  <a className="text-xs underline text-yellow-800 hover:text-yellow-900 mr-3" href={fp.startsWith('http') || fp.startsWith('data:') ? fp : `${window.location.origin}${fp.startsWith('/') ? fp : '/' + fp}`} target="_blank" rel="noreferrer">Ver archivo</a>
+                                  {/* If this is a license request and still pending, allow visual validation and apply dates */}
+                                  {/* License */}
+                                  {((d._meta?.kind === 'license') || (d.type && String(d.type).toLowerCase().includes('license'))) && ((d.status ?? d.state ?? 'Pendiente').toString().toLowerCase() === 'pending') ? (
+                                    <button onClick={() => confirmPendingLicense(d)} className="text-xs bg-green-600 text-white px-2 py-1 rounded text-[12px] hover:bg-green-700">Validar y aplicar</button>
+                                  ) : null}
+                                  {/* SOAT */}
+                                  {((d._meta?.kind === 'soat') || (d.type && String(d.type).toLowerCase().includes('soat'))) && ((d.status ?? d.state ?? 'Pendiente').toString().toLowerCase() === 'pending') ? (
+                                    <button onClick={() => confirmPendingSoat(d)} className="ml-2 text-xs bg-green-600 text-white px-2 py-1 rounded text-[12px] hover:bg-green-700">Validar y aplicar SOAT</button>
+                                  ) : null}
+                                  {/* Technical review */}
+                                  {((d._meta?.kind === 'technical') || (d.type && String(d.type).toLowerCase().includes('technical')) || (d.type && String(d.type).toLowerCase().includes('revisión'))) && ((d.status ?? d.state ?? 'Pendiente').toString().toLowerCase() === 'pending') ? (
+                                    <button onClick={() => confirmPendingTechnical(d)} className="ml-2 text-xs bg-green-600 text-white px-2 py-1 rounded text-[12px] hover:bg-green-700">Validar y aplicar RT</button>
+                                  ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               </div>
@@ -657,37 +861,14 @@ const DriverProfile: React.FC = () => {
                   </>
                 )}
 
-                {docType !== 'license' && (
-                  <div>
-                    <label className="block text-sm">Archivo (opcional)</label>
-                    <input type="file" accept="image/*,application/pdf" onChange={handleDocFile} />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm">Archivo (opcional)</label>
+                  <input type="file" accept="image/*,application/pdf" onChange={handleDocFile} />
+                </div>
               </div>
               <div className="p-4 border-t flex justify-end space-x-2">
                 <button onClick={() => setDocModalOpen(false)} className="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
                 <button onClick={submitDocument} className="px-4 py-2 bg-blue-600 text-white rounded">Enviar</button>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Change Vehicle Modal */}
-        {changeVehicleOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
-              <div className="p-4 border-b flex justify-between items-center">
-                <h4 className="font-medium">Asignar nuevo vehículo</h4>
-                <button onClick={() => setChangeVehicleOpen(false)} className="text-gray-500">Cerrar</button>
-              </div>
-              <div className="p-4 space-y-3">
-                <label className="block text-sm">Nueva placa</label>
-                <input className="w-full p-2 border rounded" value={newPlate} onChange={(e) => setNewPlate(e.target.value)} placeholder="ABC123" />
-                {changeVehicleError && <p className="text-xs text-red-600">{changeVehicleError}</p>}
-                <p className="text-sm text-gray-500">Se verificará que exista SOAT y revisión técnica para la placa antes de asignarla.</p>
-              </div>
-              <div className="p-4 border-t flex justify-end space-x-2">
-                <button onClick={() => setChangeVehicleOpen(false)} className="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
-                <button onClick={submitChangeVehicle} disabled={isChangingVehicle} className="px-4 py-2 bg-blue-600 text-white rounded">{isChangingVehicle ? 'Verificando...' : 'Asignar vehículo'}</button>
               </div>
             </div>
           </div>
@@ -858,17 +1039,9 @@ const DriverProfile: React.FC = () => {
 
                 {/* Mototaxi Información */}
                 <div className="border-t pt-6">
-                  <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center md:justify-between">
-                    <div className="flex items-center">
-                      <img src={iconMoto} alt="Mototaxi" className="mr-2 w-5 h-5 sm:w-6 sm:h-6 object-contain" />
-                      <span>Mototaxi</span>
-                    </div>
-                    <div className="mt-3 md:mt-0">
-                      <button type="button" onClick={openChangeVehicle} className="px-3 py-1 bg-blue-600 text-white rounded text-sm flex items-center">
-                        <Truck className="w-4 h-4 mr-2" />
-                        Cambiar vehículo
-                      </button>
-                    </div>
+                  <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
+                    <img src={iconMoto} alt="Mototaxi" className="mr-2 w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+                    <span>Mototaxi</span>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* vehicle type removed per UX request */}
@@ -949,7 +1122,7 @@ const DriverProfile: React.FC = () => {
                   </div>
                 </div>
 
-                  {/* Revisión Técnica (solo mostrar valores) */}
+                  {/* Revisión Técnica */}
                   <div className="border-t pt-6">
                     <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
                       <svg className="mr-2" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L15 8H9L12 2Z" fill="#4B5563"/></svg>
@@ -958,16 +1131,19 @@ const DriverProfile: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de revisión</label>
-                        <input type="text" readOnly value={profileData.technicalReview?.reviewDate ? new Date(profileData.technicalReview.reviewDate).toLocaleDateString() : ''} className="w-full px-3 py-2 bg-gray-200 rounded-md text-gray-600 cursor-not-allowed" />
+                        <input type="date" value={profileData.technicalReview?.reviewDate ?? ''} onChange={(e) => handleInputChange('technicalReview.reviewDate', e.target.value)} className="w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors" />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Vence el</label>
-                        <input type="text" readOnly value={profileData.technicalReview?.expiresAt ? new Date(profileData.technicalReview.expiresAt).toLocaleDateString() : ''} className="w-full px-3 py-2 bg-gray-200 rounded-md text-gray-600 cursor-not-allowed" />
+                        <input type="date" value={profileData.technicalReview?.expiresAt ?? ''} onChange={(e) => handleInputChange('technicalReview.expiresAt', e.target.value)} className="w-full px-3 py-2 bg-gray-100 border-none rounded-md focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none transition-colors" />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
                         <input type="text" readOnly value={profileData.technicalReview?.passed ? 'Aprobada' : profileData.technicalReview?.needsRenewal ? 'Necesita renovación' : (profileData.technicalReview?.passed === false ? 'Reprobada' : '')} className="w-full px-3 py-2 bg-gray-200 rounded-md text-gray-600 cursor-not-allowed" />
                       </div>
+                    </div>
+                    <div className="mt-4">
+                      <button type="button" onClick={() => openDocModal('technical')} className="px-3 py-1 bg-blue-600 text-white rounded text-sm">Solicitar renovación</button>
                     </div>
                   </div>
 
@@ -1070,4 +1246,33 @@ const DriverProfile: React.FC = () => {
   );
 };
 
-export default DriverProfile;
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    console.error('ErrorBoundary caught an error', error, errorInfo);
+  }
+
+  render(): React.ReactNode {
+    if (this.state.hasError) {
+      return <h2>Algo salió mal. Por favor, recarga la página.</h2>;
+    }
+
+    return this.props.children;
+  }
+}
+
+const DriverProfileWithBoundary: React.FC = () => (
+  <ErrorBoundary>
+    <DriverProfile />
+  </ErrorBoundary>
+);
+
+export default DriverProfileWithBoundary;

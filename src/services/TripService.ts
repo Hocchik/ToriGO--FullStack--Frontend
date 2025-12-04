@@ -7,7 +7,7 @@ const TripService = {
   requestTrip: (payload: any) => api.post('/trips/request', payload),
 
   // Append trace points to a trip
-  appendTrace: (tripId: string, traceChunk: Array<any>) => api.post(`/trips/${encodeURIComponent(tripId)}/trace`, { trace: traceChunk }),
+  appendTrace: (tripId: string, traceChunk: Array<any>) => api.post(`/trips/${encodeURIComponent(tripId)}/trace`, { points: traceChunk }),
 
   // Helpers for driver lifecycle
   markArrived: (tripId: string, body?: any) => api.post(`/trips/${encodeURIComponent(tripId)}/arrived`, body || {}),
@@ -17,7 +17,37 @@ const TripService = {
   markCanceled: (tripId: string, body?: any) => api.post(`/trips/${encodeURIComponent(tripId)}/cancel`, body || {}),
 
   // Get available trips
-  getAvailable: (params?: any) => api.get('/trips/available', { params }),
+  // Normalize backend response: backend may return { trips: [...] } or the array directly
+  getAvailable: (params?: any) => {
+    console.error('[DEBUG] 🌐 TripService.getAvailable() called');
+    return api.get('/trips/available', { params })
+      .then((res) => {
+        console.error('[DEBUG] 📥 TripService: API Response raw:', res);
+        console.error('[DEBUG] 📥 TripService: res.data =', res?.data);
+        console.error('[DEBUG] 📥 TripService: res.data type =', typeof res?.data);
+        
+        // Backend returns { data: [...] } or { trips: [...] } or just [...]
+        let trips = [];
+        if (Array.isArray(res?.data)) {
+          trips = res.data;
+        } else if (res?.data?.trips && Array.isArray(res.data.trips)) {
+          trips = res.data.trips;
+        } else if (res?.data?.data && Array.isArray(res.data.data)) {
+          trips = res.data.data;
+        } else if (res?.data) {
+          trips = [res.data];
+        }
+        
+        console.error('[DEBUG] ✅ TripService: Normalized to array, count:', trips.length);
+        console.error('[DEBUG] 📊 TripService: First trip sample:', trips[0]);
+        
+        return { data: trips };
+      })
+      .catch((err) => {
+        console.error('[DEBUG] ❌ TripService.getAvailable() error:', err);
+        throw err;
+      });
+  },
   // Driver accept a trip
   acceptTrip: (body: any) => {
     // prefer authenticated per-trip accept: POST /trips/:trip_id/accept
@@ -51,7 +81,7 @@ const TripService = {
     // fallback: send upsert trip payload containing driverTrace
     return api.post('/trips', body);
   },
-  getTrip: (tripId: string) => api.get(`/trips/${encodeURIComponent(tripId)}`),
+  getTrip: (tripId: string, params?: any) => api.get(`/trips/${encodeURIComponent(tripId)}`, { params }),
 };
 
 export default TripService;

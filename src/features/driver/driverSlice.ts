@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import TripService from '../../services/TripService';
 import * as DriverService from '../../services/DriverService';
+import { transformTripToRideRequest, extractTripsArray } from './utils/transformers';
 
 interface DriverProfile {
   id?: string;
@@ -42,6 +43,9 @@ interface DriverState {
   pendingDocuments: any[];
   loadingProfile: boolean;
   profileError?: string | null;
+  availableTrips: any[];
+  loadingAvailableTrips: boolean;
+  availableTripsError?: string | null;
 }
 
 const initialState: DriverState = {
@@ -51,6 +55,9 @@ const initialState: DriverState = {
   pendingDocuments: [],
   loadingProfile: false,
   profileError: null,
+  availableTrips: [],
+  loadingAvailableTrips: false,
+  availableTripsError: null,
 };
 
 const mapProfileResponse = (data: any): DriverProfile => {
@@ -118,9 +125,11 @@ const driverSlice = createSlice({
         // while pending, keep previous availability
       })
       .addCase(setDriverAvailability.fulfilled, (state, action) => {
-        if (action.payload && (action.payload.availability || action.payload.status)) {
-          state.availability = (action.payload.availability || action.payload.status) as any;
-        }
+        console.error('[DEBUG] 🟢 Redux: setDriverAvailability.fulfilled, payload:', action.payload);
+        // Backend returns { message, driver: { id, user_id, availability, ... } }
+        const newAvailability = action.payload?.availability || action.payload?.driver?.availability || action.payload?.status || 'offline';
+        console.error('[DEBUG] 📊 Setting availability to:', newAvailability);
+        state.availability = newAvailability as any;
       })
       .addCase(setDriverAvailability.rejected, (state) => {
         state.availability = 'offline';
@@ -151,6 +160,46 @@ const driverSlice = createSlice({
       .addCase(updateDriverProfile.rejected, (state, action: any) => {
         state.loadingProfile = false;
         state.profileError = action.payload ?? action.error?.message;
+      })
+
+      // getAvailableTrips handlers
+      .addCase(getAvailableTrips.pending, (state) => {
+        console.error('[DEBUG] 🟡 Redux: getAvailableTrips.pending');
+        state.loadingAvailableTrips = true;
+        state.availableTripsError = null;
+      })
+      .addCase(getAvailableTrips.fulfilled, (state, action: PayloadAction<any>) => {
+        console.error('[DEBUG] 🟢 Redux: getAvailableTrips.fulfilled, payload:', action.payload);
+        state.loadingAvailableTrips = false;
+        
+        // Action payload should already be an array of trips (cleaned up in thunk)
+        let trips = Array.isArray(action.payload) ? action.payload : [];
+        console.error('[DEBUG] 📦 Trips array length:', trips.length);
+        
+        if (trips.length === 0) {
+          console.error('[DEBUG] ⚠️  No trips found in response');
+          state.availableTrips = [];
+        } else {
+          // Transform each trip to RideRequest format
+          const transformed = trips.map((trip, index) => {
+            try {
+              const result = transformTripToRideRequest(trip);
+              console.error(`[DEBUG] ✅ Trip ${index} transformed:`, result);
+              return result;
+            } catch (e) {
+              console.error(`[DEBUG] ❌ Error transforming trip ${index}:`, e);
+              return null;
+            }
+          }).filter(t => t !== null);
+          
+          console.error('[DEBUG] 📊 Final transformed trips:', transformed);
+          state.availableTrips = transformed;
+        }
+      })
+      .addCase(getAvailableTrips.rejected, (state, action: any) => {
+        console.error('[DEBUG] 🔴 Redux: getAvailableTrips.rejected', action.payload);
+        state.loadingAvailableTrips = false;
+        state.availableTripsError = action.payload ?? action.error?.message;
       });
   },
 });
@@ -162,9 +211,13 @@ export const setDriverAvailability = createAsyncThunk(
   'driver/setAvailability',
   async (availability: 'offline' | 'available' | 'busy', { rejectWithValue }) => {
     try {
+      console.error('[DEBUG] 🔴 Redux Thunk: setDriverAvailability called with:', availability);
       const res = await TripService.setAvailability({ availability });
-      return res?.data || { availability };
+      console.error('[DEBUG] 🟢 Redux Thunk: setDriverAvailability response:', res);
+      // Backend returns { message, driver: { availability, ... } }
+      return res?.data?.driver || res?.data || { availability };
     } catch (err: any) {
+      console.error('[DEBUG] ❌ Redux Thunk: setDriverAvailability error:', err);
       return rejectWithValue(err?.response?.data || err?.message || 'Failed to set availability');
     }
   }
@@ -180,6 +233,28 @@ export const acceptTrip = createAsyncThunk(
       return res?.data || payload;
     } catch (err: any) {
       return rejectWithValue(err?.response?.data || err?.message || 'Failed to accept trip');
+    }
+  }
+);
+
+// Thunk to fetch available trips for driver
+export const getAvailableTrips = createAsyncThunk(
+  'driver/getAvailableTrips',
+  async (_, { rejectWithValue }) => {
+    try {
+      console.error('[DEBUG] 🔴 Redux Thunk: getAvailableTrips called');
+      const res = await TripService.getAvailable();
+      console.error('[DEBUG] 🟢 Redux Thunk: full response', res);
+      
+      // Extract trips array using helper function
+      const trips = extractTripsArray(res?.data);
+      console.error('[DEBUG] ✅ Extracted trips array:', trips);
+      console.error('[DEBUG] 📦 Trip count:', trips.length);
+      
+      return trips;
+    } catch (err: any) {
+      console.error('[DEBUG] 🔴 Redux Thunk: error', err);
+      return rejectWithValue(err?.response?.data || err?.message || 'Failed to fetch available trips');
     }
   }
 );

@@ -9,6 +9,10 @@ interface DriverMapProps {
   showRoute?: boolean;
   showMarkers?: boolean;
   className?: string;
+  routePath?: Array<Loc> | undefined;
+  routeProgress?: number | undefined;
+  showRouteProgress?: boolean | undefined;
+  expandResolutionMeters?: number | undefined;
 }
 
 export default function DriverMap({ origin, destination, driverLocation, showRoute, showMarkers = true, className }: DriverMapProps) {
@@ -27,6 +31,12 @@ export default function DriverMap({ origin, destination, driverLocation, showRou
         followDriver={true}
         routeFrom={driverLocation}
         routeTo={shouldShowRoute ? destination : undefined}
+        // default resolution per point (meters) for densifying the route
+        expandResolutionMeters={8}
+        // route progress will be provided by parent when simulating
+        routePath={undefined}
+        routeProgress={0}
+        showRouteProgress={false}
       />
     </div>
   );

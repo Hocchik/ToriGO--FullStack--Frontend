@@ -1,0 +1,24 @@
+{
+  "endpoint": "POST http://localhost:3001/trips/request",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": {
+    "passenger_id": "550e8400-e29b-41d4-a716-446655440000",
+    "origin_address": "Jirón Ucayali 150, Lima",
+    "origin_lat": -12.0464,
+    "origin_lng": -77.0428,
+    "destination_address": "Av. Paseo de la República 3000, Breña",
+    "destination_lat": -12.0520,
+    "destination_lng": -77.0450,
+    "fare": 15.50,
+    "external_id": "test-trip-TESTEOOOO"
+  },
+  "description": "Crea un viaje desde Plaza Mayor al Paseo de la República",
+  "comments": [
+    "Este JSON crea un viaje de prueba con coordenadas reales de Lima",
+    "La passenger_id es un UUID de ejemplo",
+    "El external_id usa timestamp para hacerlo único",
+    "Las coordenadas son reales de Lima, Perú"
+  ]
+}

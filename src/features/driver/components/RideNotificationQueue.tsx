@@ -8,6 +8,12 @@ interface Props {
 }
 
 export default function RideNotificationQueue({ requests, onAccept, onExpire }: Props) {
+  console.log('[DEBUG] 🔔 RideNotificationQueue received:', {
+    requestsLength: requests.length,
+    requestIds: requests.map(r => r.id),
+    fullRequests: requests
+  });
+  
   const [current, setCurrent] = useState<RideRequest | null>(null);
   /* const [queue, setQueue] = useState<RideRequest[]>([]); */
 
@@ -57,7 +63,7 @@ export default function RideNotificationQueue({ requests, onAccept, onExpire }: 
     
     {/* Rating del pasajero */}
     <span className="text-lg font-bold text-gray-600 bg-red-50 px-2 py-0.5 rounded-full">
-        ⭐ {current.passenger.rating.toFixed(1)}
+        ⭐ {(Number(current.passenger.rating) || 5).toFixed(1)}
     </span>
   </div>
 

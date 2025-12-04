@@ -14,21 +14,21 @@ export const driverRegisterStyles = {
   container: "w-full max-w-md mx-auto",
   
   // Header
-  headerContainer: "text-center mb-4",
-  headerTitle: "text-xl font-bold text-gray-900 mb-1",
-  headerSubtitle: "text-gray-500 text-xs",
+  headerContainer: "text-center mb-2 lg:mb-4",
+  headerTitle: "text-lg lg:text-xl font-bold text-gray-900 mb-0.5 lg:mb-1",
+  headerSubtitle: "text-gray-500 text-xs lg:text-xs",
   
   // Form
-  form: "space-y-3",
+  form: "space-y-2 lg:space-y-3",
   
   // Error message
-  errorMessage: "text-red-500 text-xs mb-2 p-2 bg-red-50 rounded-lg border border-red-200",
-  loadingMessage: "text-gray-500 text-xs mb-2 p-2 bg-gray-50 rounded-lg border border-gray-200",
+  errorMessage: "text-red-500 text-xs mb-1 lg:mb-2 p-2 bg-red-50 rounded-lg border border-red-200",
+  loadingMessage: "text-gray-500 text-xs mb-1 lg:mb-2 p-2 bg-gray-50 rounded-lg border border-gray-200",
   
   // Input groups
-  inputGroup: "mb-3",
+  inputGroup: "mb-2 lg:mb-3",
   label: "block text-xs font-medium text-gray-700 mb-1",
-  input: "w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm",
+  input: "w-full px-3 py-1.5 lg:py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-xs lg:text-sm",
   
   // Phone section
   phoneContainer: "flex",
@@ -45,7 +45,7 @@ export const driverRegisterStyles = {
   
   // Buttons
   primaryButton: "w-full bg-red-600 text-white py-2 px-4 rounded-xl hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 font-medium text-sm",
-  buttonGroup: "flex space-x-3 mt-4",
+  buttonGroup: "flex space-x-2 lg:space-x-3 mt-2 lg:mt-4",
   secondaryButton: "flex-1 bg-gray-400 text-white py-2 px-3 rounded-xl hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-colors duration-200 font-medium text-sm",
   primaryButtonHalf: "flex-1 bg-red-600 text-white py-2 px-3 rounded-xl hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 font-medium text-sm",
   

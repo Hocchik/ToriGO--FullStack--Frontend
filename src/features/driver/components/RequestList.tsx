@@ -8,6 +8,12 @@ interface Props {
 }
 
 export default function RequestList({ requests, onAccept, onStopSearch, showPreview = true }: Props) {
+  console.log('[DEBUG] 🎯 RequestList rendered with:', {
+    requestsLength: requests.length,
+    requests: requests,
+    keys: requests.map(r => r.id)
+  });
+  
   const gmapsKey = (import.meta.env.VITE_GMAPS_KEY as string) || localStorage.getItem('gMapsKey') || '';
 
   const buildStaticPreview = (req: any) => {
@@ -105,7 +111,7 @@ export default function RequestList({ requests, onAccept, onStopSearch, showPrev
               {req.passenger.name}
             </h3>
             <span className="text-lg font-bold text-red-600 flex items-center bg-red-50 px-3 py-1 rounded-full border border-red-200 shadow-sm">
-              <span className="text-sm mr-1">⭐</span> {req.passenger.rating.toFixed(1)}
+              <span className="text-sm mr-1">⭐</span> {(Number(req.passenger.rating) || 5).toFixed(1)}
             </span>
           </div>
 
